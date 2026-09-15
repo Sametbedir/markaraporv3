@@ -40,6 +40,7 @@
     "@aws-sdk/s3-request-presigner": "3.1105.0",
     "@azure/storage-blob": "12.33.0",
     "@floating-ui/react": "0.26.0",
+    "@google/genai": "^2.22.0",
     "@headlessui/react": "2.2.10",
     "@hookform/resolvers": "3.9.0",
     "@prisma/client": "6.7.0",
