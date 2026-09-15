@@ -1,0 +1,244 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native"]
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  hashedPassword String
+  companyName    String?   @map("company_name")
+  website        String?
+  industry       String?
+  isActive       Boolean   @default(true) @map("is_active")
+  isAdmin        Boolean   @default(false) @map("is_admin")
+
+  // API Credentials
+  metaAccessToken       String? @map("meta_access_token")
+  metaAdAccountId       String? @map("meta_ad_account_id")
+  googleAdsRefreshToken String? @map("google_ads_refresh_token")
+  googleAdsCustomerId   String? @map("google_ads_customer_id")
+  tiktokAccessToken     String? @map("tiktok_access_token")
+  tiktokAdvertiserId    String? @map("tiktok_advertiser_id")
+  shopifyShopUrl        String? @map("shopify_shop_url")
+  shopifyAccessToken    String? @map("shopify_access_token")
+  ga4PropertyId         String? @map("ga4_property_id")
+  ga4ClientEmail        String? @map("ga4_client_email")
+  ga4PrivateKey         String? @map("ga4_private_key")
+
+  // iKas + Ticimax
+  ikasStoreUrl      String? @map("ikas_store_url")
+  ikasAccessToken   String? @map("ikas_access_token")
+  ticimaxApiKey      String? @map("ticimax_api_key")
+  ticimaxStoreId     String? @map("ticimax_store_id")
+
+  // Cost structure
+  commissionRateTrendyol    Float @default(0) @map("commission_rate_trendyol")
+  commissionRateHepsiburada Float @default(0) @map("commission_rate_hepsiburada")
+  commissionRateShopify     Float @default(0) @map("commission_rate_shopify")
+  commissionRateIkas        Float @default(0) @map("commission_rate_ikas")
+  commissionRateTicimax     Float @default(0) @map("commission_rate_ticimax")
+  shippingCostPerOrder      Float @default(0) @map("shipping_cost_per_order")
+  returnRate                Float @default(0) @map("return_rate")
+  productCogsRate           Float @default(0) @map("product_cogs_rate")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  campaigns    Campaign[]
+  dailyMetrics DailyMetric[]
+  orders       Order[]
+  manualEntries ManualEntry[]
+  goals        Goal[]
+  uptimeMonitors UptimeMonitor[]
+  simulations  SimulationResult[]
+
+  @@map("users")
+}
+
+model Campaign {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  externalId     String?  @map("external_id")
+  name           String
+  status         String   @default("active")
+  platform       String
+  objective      String?
+  dailyBudget    Float?   @map("daily_budget")
+  lifetimeBudget Float?   @map("lifetime_budget")
+  startDate      DateTime? @map("start_date")
+  endDate        DateTime? @map("end_date")
+  source         String   @default("api")
+  dataSourceLabel String  @default("API'den") @map("data_source_label")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  dailyMetrics DailyMetric[]
+
+  @@index([userId])
+  @@index([externalId])
+  @@map("campaigns")
+}
+
+model DailyMetric {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  campaignId  String?  @map("campaign_id")
+  date        DateTime @db.Date
+  platform    String
+
+  impressions Int     @default(0)
+  clicks      Int     @default(0)
+  spend       Float   @default(0)
+  conversions Int     @default(0)
+  revenue     Float   @default(0)
+  ctr         Float   @default(0)
+  cpc         Float   @default(0)
+  cpm         Float   @default(0)
+  roas        Float   @default(0)
+  frequency   Float   @default(0)
+  reach       Int     @default(0)
+
+  source          String @default("api")
+  dataSourceLabel String @default("API'den") @map("data_source_label")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId])
+  @@index([campaignId])
+  @@map("daily_metrics")
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  externalId    String?  @map("external_id")
+  orderNumber   String?  @map("order_number")
+  customerName  String?  @map("customer_name")
+  customerEmail String?  @map("customer_email")
+
+  totalPrice    Float    @default(0) @map("total_price")
+  subtotalPrice Float?   @map("subtotal_price")
+  shippingPrice Float?   @map("shipping_price")
+  taxPrice      Float?   @map("tax_price")
+  discountPrice Float?   @map("discount_price")
+  currency      String   @default("TRY")
+
+  channel   String
+  source    String  @default("api")
+  status    String  @default("confirmed")
+  itemCount Int     @default(0) @map("item_count")
+
+  orderDate DateTime @map("order_date")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  notes String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, orderDate])
+  @@index([userId])
+  @@index([externalId])
+  @@map("orders")
+}
+
+model ManualEntry {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  entryType     String   @map("entry_type")
+  entryCategory String?  @map("entry_category")
+  dataJson      String?  @map("data_json")
+  fileName      String?  @map("file_name")
+  fileType      String?  @map("file_type")
+  status        String   @default("pending")
+  errorMessage  String?  @map("error_message")
+  entryDate     DateTime @default(now()) @map("entry_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("manual_entries")
+}
+
+model Goal {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  periodType  String   @map("period_type") // weekly, monthly
+  targetType  String   @map("target_type") // spend, revenue, roas, orders, profit
+  targetValue Float    @map("target_value")
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("goals")
+}
+
+model UptimeMonitor {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  name            String
+  url             String
+  intervalSeconds Int      @default(300) @map("interval_seconds")
+  timeoutSeconds  Int      @default(15) @map("timeout_seconds")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user   User          @relation(fields: [userId], references: [id])
+  checks UptimeCheck[]
+
+  @@index([userId])
+  @@map("uptime_monitors")
+}
+
+model UptimeCheck {
+  id             String   @id @default(uuid())
+  monitorId      String   @map("monitor_id")
+  status         String   // up, down, warning
+  statusCode     Int?     @map("status_code")
+  responseTimeMs Float?   @map("response_time_ms")
+  errorType      String?  @map("error_type")
+  errorMessage   String?  @map("error_message")
+  checkedAt      DateTime @default(now()) @map("checked_at")
+
+  monitor UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, checkedAt])
+  @@map("uptime_checks")
+}
+
+model SimulationResult {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  currentBudget    Float    @map("current_budget")
+  newBudget        Float    @map("new_budget")
+  startDate        DateTime @map("start_date") @db.Date
+  endDate          DateTime @map("end_date") @db.Date
+  projectedSpend   Float    @map("projected_spend")
+  projectedRevenue Float    @map("projected_revenue")
+  projectedRoas    Float    @map("projected_roas")
+  projectedOrders  Int      @map("projected_orders")
+  projectedProfit  Float    @map("projected_profit")
+  confidenceScore  Float    @map("confidence_score")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("simulation_results")
+}
