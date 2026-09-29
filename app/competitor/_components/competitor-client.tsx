@@ -32,11 +32,11 @@ export default function CompetitorClient({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadingSteps = [
-    'Marka konumlandırma ve değer önerileri analiz ediliyor...',
-    'Teklif, huni ve ticari koşul matrisi oluşturuluyor...',
-    'Ürün & fiyatlandırma stratejileri karşılaştırılıyor...',
-    'Kreatif istihbarat ve reklam açısı (angle) kancaları çözümleniyor...',
-    'Ajans seviyesi stratejik aksiyon planı hazırlanıyor...',
+    'Web siteleri, sitemap.xml ve robots.txt dosyaları canlı taranıyor...',
+    'Meta Pixel, GTM, GA4 ve TikTok izleme kodları analiz ediliyor...',
+    'Meta Reklam Kütüphanesi (Ads Library) parametreleri ve aktif kancalar tespit ediliyor...',
+    'Teklif, huni ve fiyatlandırma strateji matrisi oluşturuluyor...',
+    'Gerçek verilere dayalı ajans aksiyon planı ve sitemap optimizasyonu hazırlanıyor...',
   ];
 
   useEffect(() => {
