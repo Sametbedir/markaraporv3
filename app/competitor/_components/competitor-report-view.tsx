@@ -50,7 +50,30 @@ export default function CompetitorReportView({
     } catch {}
   };
 
-  const bp = report?.brandPositioning || {
+  if (!report || !report.brandPositioning) {
+    return (
+      <div className="rounded-3xl border border-border bg-card/90 backdrop-blur-xl p-8 text-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+          <Swords className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-bold text-foreground">Yeni Analiz Başlatın</h3>
+        <p className="text-xs text-muted-foreground max-w-md mx-auto">
+          Raporlama motorumuz 5 bölümlük Stratejik Rekabet ve Huni Analizi standardına güncellendi. Lütfen yeni bir analiz başlatın.
+        </p>
+        {onNewAnalysis && (
+          <button
+            type="button"
+            onClick={onNewAnalysis}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition shadow-sm"
+          >
+            Analiz Formuna Git
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const bp = report.brandPositioning || {
     ownPositioning: 'Veri analiz ediliyor...',
     ownValueProposition: 'Değer önerisi hazırlanıyor...',
     competitorPositioning: 'Rakip konumlandırması inceleniyor...',
@@ -110,9 +133,9 @@ export default function CompetitorReportView({
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
-              <span className="text-emerald-500">{report.ownBrand.name}</span>
+              <span className="text-emerald-500">{report?.ownBrand?.name || 'Markanız'}</span>
               <span className="mx-2.5 text-muted-foreground/50 font-normal">vs</span>
-              <span className="text-rose-500">{report.competitorBrand.name}</span>
+              <span className="text-rose-500">{report?.competitorBrand?.name || 'Rakip Marka'}</span>
             </h1>
           </div>
 
@@ -182,23 +205,23 @@ export default function CompetitorReportView({
               <div className="p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <h4 className="font-bold text-foreground text-sm">{report.ownBrand.name}</h4>
+                  <h4 className="font-bold text-foreground text-sm">{report?.ownBrand?.name || 'Markanız'}</h4>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold ml-auto">Sizin Konumlandırmanız</span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{bp.ownPositioning}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{bp?.ownPositioning}</p>
                 <div className="p-3 rounded-xl bg-background border border-border">
                   <p className="text-[11px] text-muted-foreground">Değer Önerisi</p>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{bp.ownValueProposition}</p>
+                  <p className="text-sm font-semibold text-foreground mt-0.5">{bp?.ownValueProposition}</p>
                 </div>
               </div>
 
               <div className="p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <h4 className="font-bold text-foreground text-sm">{report.competitorBrand.name}</h4>
+                  <h4 className="font-bold text-foreground text-sm">{report?.competitorBrand?.name || 'Rakip'}</h4>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold ml-auto">Rakip Konumlandırma</span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{bp.competitorPositioning}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{bp?.competitorPositioning}</p>
                 <div className="p-3 rounded-xl bg-background border border-border">
                   <p className="text-[11px] text-muted-foreground">Değer Önerisi</p>
                   <p className="text-sm font-semibold text-foreground mt-0.5">{bp.competitorValueProposition}</p>
@@ -249,11 +272,11 @@ export default function CompetitorReportView({
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border">
                     <div className="p-4 space-y-1">
-                      <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase">📗 {report.ownBrand.name}</p>
+                      <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase">📗 {report?.ownBrand?.name || 'Markanız'}</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">{row.ownStrategy}</p>
                     </div>
                     <div className="p-4 space-y-1">
-                      <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 uppercase">📕 {report.competitorBrand.name}</p>
+                      <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 uppercase">📕 {report?.competitorBrand?.name || 'Rakip'}</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">{row.competitorStrategy}</p>
                     </div>
                     <div className="p-4 space-y-1 bg-primary/[0.02]">
@@ -284,11 +307,11 @@ export default function CompetitorReportView({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 space-y-2">
-                <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">{report.ownBrand.name} Fiyatlandırma Modeli</p>
+                <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">{report?.ownBrand?.name || 'Markanız'} Fiyatlandırma Modeli</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">{ps.ownPricingModel}</p>
               </div>
               <div className="p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 space-y-2">
-                <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase">{report.competitorBrand.name} Fiyatlandırma Modeli</p>
+                <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase">{report?.competitorBrand?.name || 'Rakip'} Fiyatlandırma Modeli</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">{ps.competitorPricingModel}</p>
               </div>
             </div>
