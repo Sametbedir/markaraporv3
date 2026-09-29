@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, Upload, Activity, Settings, LogOut,
-  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass,
+  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords,
 } from 'lucide-react';
 
 interface SidebarLayoutProps {
@@ -21,6 +21,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/seo-geo', label: 'SEO & GEO Raporu', icon: Compass },
+    { href: '/competitor', label: 'Rakip Analizi', icon: Swords },
     { href: '/goals', label: 'Hedeflerim', icon: Target },
     { href: '/simulation', label: 'Simülatör', icon: Calculator },
     { href: '/upload', label: 'Veri Yükle', icon: Upload },
