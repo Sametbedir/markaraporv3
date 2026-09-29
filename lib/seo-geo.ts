@@ -1,4 +1,18 @@
-﻿// lib/seo-geo.ts
+import {
+  buildIntentAndTaxonomyStrategy,
+  buildPlatformTechnicalActions,
+  buildSchemaGeoMarkup,
+  buildCroTrustSignals,
+  buildExpectedTechnicalImpact,
+  IntentAndTaxonomyStrategy,
+  PlatformTechnicalActions,
+  SchemaGeoMarkup,
+  CroTrustSignal,
+  ExpectedTechnicalImpact,
+} from './seo-geo-strategy';
+
+export * from './seo-geo-strategy';
+// lib/seo-geo.ts
 import { GoogleGenAI } from '@google/genai';
 
 export interface SeoGeoRequest {
@@ -59,6 +73,13 @@ export interface SeoGeoReportResult {
   niche: string;
   location: string;
   websiteUrl?: string;
+
+  // 1.1 Niyet ve Mimari Stratejisi
+  intentAndTaxonomy: IntentAndTaxonomyStrategy;
+  platformTechnicalActions: PlatformTechnicalActions;
+  schemaMarkup: SchemaGeoMarkup;
+  croTrustSignals: CroTrustSignal[];
+  expectedTechnicalImpact: ExpectedTechnicalImpact;
 
   // 1. Anlık Durum ve Trend Sinyali
   trendSignal: {
@@ -318,6 +339,11 @@ function formatAiReport(data: any, input: SeoGeoRequest, source: 'gemini-ai' | '
           ],
       monitoringInterval: 'Her 7 Günde Bir Otomatik Tarama ve Alarm Kontrolü',
     },
+    intentAndTaxonomy: buildIntentAndTaxonomyStrategy(input.niche, input.location),
+    platformTechnicalActions: buildPlatformTechnicalActions(platform, input.niche, input.location),
+    schemaMarkup: buildSchemaGeoMarkup(input.websiteUrl || 'https://siteniz.com', input.niche, input.location),
+    croTrustSignals: buildCroTrustSignals(input.location, input.niche),
+    expectedTechnicalImpact: buildExpectedTechnicalImpact(),
     source,
   };
 }
@@ -383,6 +409,11 @@ function generateDeterministicExpertReport(input: SeoGeoRequest): SeoGeoReportRe
       ],
       monitoringInterval: 'Her 7 Günde Bir Düzenli Tarama & Otomatik Uyarı',
     },
+    intentAndTaxonomy: buildIntentAndTaxonomyStrategy(input.niche, input.location),
+    platformTechnicalActions: buildPlatformTechnicalActions(platform, input.niche, input.location),
+    schemaMarkup: buildSchemaGeoMarkup(input.websiteUrl || 'https://siteniz.com', input.niche, input.location),
+    croTrustSignals: buildCroTrustSignals(input.location, input.niche),
+    expectedTechnicalImpact: buildExpectedTechnicalImpact(),
     source: 'expert-engine',
   };
 }
