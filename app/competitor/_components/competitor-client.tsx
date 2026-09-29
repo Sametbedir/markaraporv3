@@ -32,10 +32,11 @@ export default function CompetitorClient({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadingSteps = [
-    'Marka ve rakip alan adları ile mağaza profilleri taranıyor...',
-    'Meta Reklam Kütüphanesi ve Google Ads kanca stratejileri çözümleniyor...',
-    'Kargo, indirim eşiği ve ödeme koşulları karşılaştırma matrisine dökülüyor...',
-    'Sıfır halüsinasyon kuralı uygulanıyor (Doğrulanamayan metrikler filtreleniyor)...',
+    'Marka konumlandırma ve değer önerileri analiz ediliyor...',
+    'Teklif, huni ve ticari koşul matrisi oluşturuluyor...',
+    'Ürün & fiyatlandırma stratejileri karşılaştırılıyor...',
+    'Kreatif istihbarat ve reklam açısı (angle) kancaları çözümleniyor...',
+    'Ajans seviyesi stratejik aksiyon planı hazırlanıyor...',
   ];
 
   useEffect(() => {
@@ -44,9 +45,15 @@ export default function CompetitorClient({
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        setReport(parsed);
-        setActiveTab('report');
-      } catch {}
+        if (parsed && parsed.brandPositioning) {
+          setReport(parsed);
+          setActiveTab('report');
+        } else {
+          localStorage.removeItem('last_competitor_report');
+        }
+      } catch {
+        localStorage.removeItem('last_competitor_report');
+      }
     }
   }, []);
 
@@ -118,13 +125,13 @@ export default function CompetitorClient({
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-              Rakip Analizi & İstihbarat Radarı
+              Stratejik Rekabet & Huni Raporu
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                Sıfır Halüsinasyon Standardı
+                Ajans Seviyesi
               </span>
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Meta Reklam Kütüphanesi kancaları, kargo & teklif karşılaştırma matrisi ve somut fiyatlandırma kıyaslaması.
+              Marka konumlandırma, huni analizi, fiyatlandırma stratejisi, kreatif istihbarat ve ajans aksiyon planı.
             </p>
           </div>
         </div>

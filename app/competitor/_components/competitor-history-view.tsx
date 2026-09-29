@@ -55,14 +55,14 @@ export default function CompetitorHistoryView({
                       <Swords className="w-3.5 h-3.5" />
                     </span>
                     <span className="text-xs font-bold text-foreground">
-                      {rep.ownBrand?.name} <span className="text-muted-foreground font-normal">vs</span> {rep.competitorBrand?.name}
+                      {rep?.ownBrand?.name || 'Markanız'} <span className="text-muted-foreground font-normal">vs</span> {rep?.competitorBrand?.name || 'Rakip'}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground font-medium">
-                      {rep.niche || 'E-Ticaret'}
+                      {rep?.niche || 'E-Ticaret'}
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground line-clamp-1">
-                    {rep.adRadar?.summary || 'Ticari koşullar ve reklam kancaları kıyaslaması'}
+                    {rep?.agencyActionPlan?.keyTakeaway || (rep as any)?.adRadar?.summary || 'Stratejik rekabet ve huni analizi raporu'}
                   </p>
                   <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                     <Calendar className="w-3 h-3" /> {dateStr}

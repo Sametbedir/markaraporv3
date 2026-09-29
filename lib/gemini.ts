@@ -10,12 +10,11 @@ if (!apiKey) {
 const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 const CANDIDATE_MODELS = [
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
   'gemini-3.7-flash',
   'gemini-3.8-flash',
-  'gemini-flash-latest',
-  'gemini-3.6-flash',
   'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
 ];
 
 export async function eTicaretDanismaniAnalizi(dashboardVerileri: any) {
@@ -42,7 +41,7 @@ export async function eTicaretDanismaniAnalizi(dashboardVerileri: any) {
         if (response?.text) {
           return response.text;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn(`Model ${model} denenirken hata (bir sonrakine geçiliyor):`, err?.message || err);
       }
     }
