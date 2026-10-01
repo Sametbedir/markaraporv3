@@ -1,4 +1,4 @@
-export interface DashboardSummary {
+﻿export interface DashboardSummary {
   total_spend: number;
   total_revenue: number;
   total_orders: number;
@@ -18,6 +18,20 @@ export interface DashboardSummary {
   avg_aov?: number;
   avg_cac?: number;
   daily_revenue?: number;
+  total_basket?: number;
+  total_followers?: number;
+}
+
+export interface MonthlyItem {
+  month: string;
+  year: number;
+  spend: number;
+  revenue: number;
+  orders: number;
+  roas: number;
+  basket: number;
+  followers: number;
+  aov: number;
 }
 
 export interface TrendDataPoint {
