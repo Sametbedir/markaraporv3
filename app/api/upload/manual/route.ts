@@ -13,13 +13,56 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title = 'Manuel Veri Girişi', year = 2026, rows = [] } = body;
+    const userId = session.user.id;
 
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json({ error: 'En az bir veri satırı girmelisiniz.' }, { status: 400 });
+    // Check if this is the single-form submission from the UI
+    // Fields: date, platform, campaign, adGroup, adName, spend, revenue, impressions, clicks, newCustomers, returningCustomers
+    let rows: any[] = [];
+    let title = body.title || 'Manuel Veri Girişi';
+    let year = Number(body.year) || new Date().getFullYear();
+
+    if (body.date || body.spend !== undefined || body.revenue !== undefined || body.campaign) {
+      // Single entry form
+      const dateStr = body.date || new Date().toISOString().split('T')[0];
+      const platformStr = body.platform || 'Manuel Giriş';
+      const campaignName = body.campaign?.trim() || `${platformStr} Kampanyası`;
+      const adGroupName = body.adGroup?.trim() || '';
+      const adName = body.adName?.trim() || '';
+      const spend = parseUniversalNumber(body.spend);
+      const revenue = parseUniversalNumber(body.revenue);
+      const impressions = Math.max(0, Math.round(parseUniversalNumber(body.impressions)));
+      const clicks = Math.max(0, Math.round(parseUniversalNumber(body.clicks)));
+      const newCust = Math.max(0, Math.round(parseUniversalNumber(body.newCustomers)));
+      const retCust = Math.max(0, Math.round(parseUniversalNumber(body.returningCustomers)));
+      const orders = newCust + retCust > 0 ? (newCust + retCust) : (revenue > 0 && spend > 0 ? Math.max(1, Math.round(revenue / (revenue > 1000 ? 500 : 100))) : 0);
+      const roas = spend > 0 ? Number((revenue / spend).toFixed(2)) : 0;
+
+      rows = [{
+        period: dateStr,
+        date: dateStr,
+        spend,
+        revenue,
+        impressions,
+        clicks,
+        orders,
+        roas,
+        platform: platformStr,
+        campaign: campaignName,
+        adGroup: adGroupName,
+        adName: adName,
+        newCustomers: newCust,
+        returningCustomers: retCust,
+      }];
+      title = campaignName || `${platformStr} Verisi`;
+      if (dateStr.includes('-')) {
+        year = parseInt(dateStr.split('-')[0]) || year;
+      }
+    } else if (Array.isArray(body.rows) && body.rows.length > 0) {
+      rows = body.rows;
+    } else {
+      return NextResponse.json({ error: 'En az bir veri satırı veya alanı girmelisiniz.' }, { status: 400 });
     }
 
-    const userId = session.user.id;
     const monthlyBreakdown: MonthlyItem[] = [];
     const normalizedRows: any[] = [];
 
@@ -36,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      const periodStr = String(r.period || `Ay ${i + 1}`).trim();
+      const periodStr = String(r.date || r.period || `Ay ${i + 1}`).trim();
       const spend = parseUniversalNumber(r.spend);
       const revenue = parseUniversalNumber(r.revenue);
       const orders = Math.max(0, Math.round(parseUniversalNumber(r.orders)));
@@ -47,7 +90,14 @@ export async function POST(req: NextRequest) {
       const roas = userRoas > 0 ? userRoas : spend > 0 ? Number((revenue / spend).toFixed(2)) : 0;
       const aov = orders > 0 ? Math.round(revenue / orders) : 0;
 
-      const isAllZero = spend === 0 && revenue === 0 && orders === 0 && roas === 0;
+      const userImpr = parseUniversalNumber(r.impressions);
+      const userClicks = parseUniversalNumber(r.clicks);
+      const dImpr = userImpr > 0 ? Math.round(userImpr) : Math.round(spend * 25);
+      const dClicks = userClicks > 0 ? Math.round(userClicks) : Math.round(spend * 1.5);
+
+      const platform = r.platform || 'Manuel Giriş';
+      const campaignName = r.campaign || `Kampanya ${i + 1}`;
+
       const dateRange = extractDateRange(periodStr, year);
       const monthName = dateRange?.monthName || periodStr;
 
@@ -63,67 +113,34 @@ export async function POST(req: NextRequest) {
         aov,
       });
 
-      if (!isAllZero) {
-        totalSpend += spend;
-        totalRevenue += revenue;
-        totalOrders += orders;
-        totalBasket += basket;
-        totalFollowers += followers;
+      totalSpend += spend;
+      totalRevenue += revenue;
+      totalOrders += orders;
+      totalBasket += basket;
+      totalFollowers += followers;
+      totalImpressions += dImpr;
+      totalClicks += dClicks;
 
-        const start = dateRange?.start || `${year}-01-01`;
-        const end = dateRange?.end || `${year}-01-31`;
-        if (start < overallStart) overallStart = start;
-        if (end > overallEnd) overallEnd = end;
+      const start = dateRange?.start || (periodStr.match(/^\d{4}-\d{2}-\d{2}$/) ? periodStr : `${year}-01-01`);
+      const end = dateRange?.end || start;
+      if (start < overallStart) overallStart = start;
+      if (end > overallEnd) overallEnd = end;
 
-        const days = dateRange?.daysCount || 30;
-        const dSpend = Math.round((spend / days) * 100) / 100;
-        const dRevenue = Math.round((revenue / days) * 100) / 100;
-        const dOrders = Math.max(0, Math.round(orders / days));
-        const dImpr = Math.round(spend * 25);
-        const dClicks = Math.round(spend * 1.5);
-
-        totalImpressions += dImpr;
-        totalClicks += dClicks;
-
-        if (dateRange && dateRange.isRange && days > 1) {
-          const cur = new Date(start);
-          const endObj = new Date(end);
-          while (cur <= endObj) {
-            normalizedRows.push({
-              date: cur.toISOString().split('T')[0],
-              monthName,
-              platform: 'Meta Ads',
-              campaign: `${monthName} Kampanyası`,
-              spend: dSpend,
-              revenue: dRevenue,
-              orders: dOrders,
-              impressions: Math.round(dSpend * 25),
-              clicks: Math.round(dSpend * 1.5),
-              conversions: dOrders,
-              roas,
-              basket,
-              followers,
-            });
-            cur.setDate(cur.getDate() + 1);
-          }
-        } else {
-          normalizedRows.push({
-            date: start,
-            monthName,
-            platform: 'Meta Ads',
-            campaign: `${monthName} Kampanyası`,
-            spend,
-            revenue,
-            orders,
-            impressions: dImpr,
-            clicks: dClicks,
-            conversions: orders,
-            roas,
-            basket,
-            followers,
-          });
-        }
-      }
+      normalizedRows.push({
+        date: start,
+        monthName,
+        platform,
+        campaign: campaignName,
+        spend,
+        revenue,
+        orders,
+        impressions: dImpr,
+        clicks: dClicks,
+        conversions: orders,
+        roas,
+        basket,
+        followers,
+      });
     }
 
     if (overallStart > overallEnd) {
@@ -136,41 +153,34 @@ export async function POST(req: NextRequest) {
     const avgCpc = totalClicks > 0 ? Number((totalSpend / totalClicks).toFixed(2)) : 0;
     const avgCtr = totalImpressions > 0 ? Number(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0;
 
-    const trend = monthlyBreakdown
-      .filter((m) => m.revenue > 0 || m.spend > 0)
-      .map((m) => {
-        const d = extractDateRange(m.month, year)?.start || `${year}-01-01`;
-        return {
-          date: d,
-          spend: m.spend,
-          revenue: m.revenue,
-          orders: m.orders,
-          impressions: Math.round(m.spend * 25),
-          clicks: Math.round(m.spend * 1.5),
-          roas: m.roas,
-        };
-      });
+    const trend = normalizedRows.map((r) => ({
+      date: r.date,
+      spend: r.spend,
+      revenue: r.revenue,
+      orders: r.orders,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      roas: r.roas,
+    }));
 
-    const campaigns = monthlyBreakdown
-      .filter((m) => m.revenue > 0 || m.spend > 0)
-      .map((m, idx) => ({
-        campaign_id: `manual-camp-${idx + 1}`,
-        campaign_name: `${m.month} Kampanyası`,
-        platform: 'Meta Ads',
-        spend: m.spend,
-        revenue: m.revenue,
-        conversions: m.orders,
-        roas: m.roas,
-        clicks: Math.round(m.spend * 1.5),
-        impressions: Math.round(m.spend * 25),
-        ctr: 2.5,
-        cpc: m.spend > 0 ? Number((m.spend / Math.max(1, m.spend * 1.5)).toFixed(2)) : 0,
-        data_source_label: 'Manuel Giriş',
-      }));
+    const campaigns = normalizedRows.map((r, idx) => ({
+      campaign_id: `manual-camp-${idx + 1}`,
+      campaign_name: r.campaign || `Kampanya ${idx + 1}`,
+      platform: r.platform || 'Manuel Giriş',
+      spend: r.spend,
+      revenue: r.revenue,
+      conversions: r.orders,
+      roas: r.roas,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr: r.impressions > 0 ? Number(((r.clicks / r.impressions) * 100).toFixed(2)) : 2.5,
+      cpc: r.clicks > 0 ? Number((r.spend / r.clicks).toFixed(2)) : 0,
+      data_source_label: 'Manuel Giriş',
+    }));
 
     const channels = [
       {
-        channel: 'Meta Ads',
+        channel: normalizedRows[0]?.platform || 'Manuel Giriş',
         order_count: totalOrders,
         total_revenue: totalRevenue,
         percentage: 100,
@@ -207,32 +217,28 @@ export async function POST(req: NextRequest) {
         total_basket: totalBasket,
         total_followers: totalFollowers,
       },
-      trend: trend.length > 0 ? trend : normalizedRows.map((r) => ({
-        date: r.date,
-        spend: r.spend,
-        revenue: r.revenue,
-        orders: r.orders,
-        impressions: r.impressions,
-        clicks: r.clicks,
-        roas: r.roas,
-      })),
+      trend,
       campaigns,
       channels,
       monthlyBreakdown,
     };
 
     try {
+      const firstRow = normalizedRows[0];
+      const campName = firstRow?.campaign || 'Manuel Reklam Kampanyası';
+      const campPlatform = firstRow?.platform || 'Manuel Giriş';
+
       const defaultCampaign =
         (await prisma.campaign.findFirst({
-          where: { userId, name: 'Manuel Reklam Kampanyası' },
+          where: { userId, name: campName },
         })) ??
         (await prisma.campaign.create({
           data: {
             userId,
-            name: 'Manuel Reklam Kampanyası',
-            platform: 'Meta Ads',
+            name: campName,
+            platform: campPlatform,
             source: 'upload',
-            dataSourceLabel: 'Manuel Tablo Girişi',
+            dataSourceLabel: 'Manuel Giriş',
           },
         }));
 
@@ -242,14 +248,14 @@ export async function POST(req: NextRequest) {
             userId,
             campaignId: defaultCampaign.id,
             date: new Date(`${r.date}T00:00:00.000Z`),
-            platform: 'Meta Ads',
+            platform: r.platform || campPlatform,
             spend: r.spend,
             revenue: r.revenue,
             impressions: r.impressions,
             clicks: r.clicks,
             conversions: r.orders,
-            ctr: 2.5,
-            cpc: r.spend > 0 ? Number((r.spend / Math.max(1, r.clicks)).toFixed(2)) : 0,
+            ctr: r.impressions > 0 ? Number(((r.clicks / r.impressions) * 100).toFixed(2)) : 2.5,
+            cpc: r.clicks > 0 ? Number((r.spend / Math.max(1, r.clicks)).toFixed(2)) : 0,
             roas: r.roas,
             source: 'upload',
             dataSourceLabel: 'Manuel Giriş',
@@ -257,21 +263,23 @@ export async function POST(req: NextRequest) {
           skipDuplicates: true,
         });
 
-        await prisma.order.createMany({
-          data: normalizedRows
-            .filter((r) => r.orders > 0)
-            .map((r, i) => ({
-              userId,
-              orderNumber: `MANUAL-${Date.now()}-${i}`,
-              totalPrice: r.revenue,
-              channel: 'Meta Ads',
-              source: 'upload',
-              status: 'confirmed',
-              itemCount: Math.max(1, Math.round(r.orders)),
-              orderDate: new Date(`${r.date}T00:00:00.000Z`),
-            })),
-          skipDuplicates: true,
-        });
+        if (totalOrders > 0) {
+          await prisma.order.createMany({
+            data: normalizedRows
+              .filter((r) => r.orders > 0)
+              .map((r, i) => ({
+                userId,
+                orderNumber: `MANUAL-${Date.now()}-${i}`,
+                totalPrice: r.revenue,
+                channel: r.platform || campPlatform,
+                source: 'upload',
+                status: 'confirmed',
+                itemCount: Math.max(1, Math.round(r.orders)),
+                orderDate: new Date(`${r.date}T00:00:00.000Z`),
+              })),
+            skipDuplicates: true,
+          });
+        }
       }
 
       try {
@@ -280,10 +288,10 @@ export async function POST(req: NextRequest) {
             userId,
             fileName: title,
             fileType: 'MANUEL',
-            importedRows: monthlyBreakdown.length,
+            importedRows: normalizedRows.length,
             dateStart: new Date(`${overallStart}T00:00:00.000Z`),
             dateEnd: new Date(`${overallEnd}T00:00:00.000Z`),
-            platforms: JSON.stringify(['Meta Ads']),
+            platforms: JSON.stringify([campPlatform]),
             status: 'success',
           },
         });
@@ -294,7 +302,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${monthlyBreakdown.length} aylık veri tablosu başarıyla kaydedildi ve Dashboard'a aktarıldı.`,
+      message: 'Veri başarıyla yüklendi!',
       reportData: clientReportPayload,
       dateStart: overallStart,
       dateEnd: overallEnd,
