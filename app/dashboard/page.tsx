@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import SidebarLayout from '@/components/sidebar-layout';
 import DashboardClient from './_components/dashboard-client';
 import AIAnalizKarti from '@/components/AIAnalizKarti';
@@ -10,23 +11,23 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect('/');
 
-  // Panelindeki mevcut veriler (burayı dilersen veritabanından gelen gerçek verilerle güncelleyebilirsin)
   const anlikVeriler = {
-    toplamHarcama: 460138,
-    toplamCiro: 1682731,
-    netKar: 1222592,
-    siparis: 3579,
-    roas: 3.66,
-    netRoas: 2.66,
-    karMarji: "72.66%"
+    toplamHarcama: 0,
+    toplamCiro: 0,
+    netKar: 0,
+    siparis: 0,
+    roas: 0,
+    netRoas: 0,
+    karMarji: "0%"
   };
 
   return (
     <SidebarLayout>
       <div className="p-6 space-y-6">
-        {/* Mevcut client dashboard bileşenin */}
-        <DashboardClient />
-        
+        <Suspense fallback={<div className="h-96 flex items-center justify-center text-muted-foreground text-sm">Yükleniyor...</div>}>
+          <DashboardClient />
+        </Suspense>
+
         {/* Yapay Zeka Analiz Asistanı */}
         <AIAnalizKarti dashboardVerileri={anlikVeriler} />
 
@@ -79,4 +80,4 @@ export default async function DashboardPage() {
       </div>
     </SidebarLayout>
   );
-}
+}

@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import SidebarLayout from '@/components/sidebar-layout';
 import UploadClient from './_components/upload-client';
 
@@ -10,7 +11,11 @@ export default async function UploadPage() {
   if (!session) redirect('/');
   return (
     <SidebarLayout>
-      <UploadClient />
+      <div className="p-6">
+        <Suspense fallback={<div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Yükleniyor...</div>}>
+          <UploadClient />
+        </Suspense>
+      </div>
     </SidebarLayout>
   );
 }

@@ -58,6 +58,7 @@ model User {
   goals        Goal[]
   uptimeMonitors UptimeMonitor[]
   simulations  SimulationResult[]
+  uploadLogs   UploadLog[]
 
   @@map("users")
 }
@@ -171,6 +172,26 @@ model ManualEntry {
   @@index([userId])
   @@map("manual_entries")
 }
+
+model UploadLog {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  fileName     String   @map("file_name")
+  fileType     String   @map("file_type")
+  importedRows Int      @default(0) @map("imported_rows")
+  dateStart    DateTime? @map("date_start") @db.Date
+  dateEnd      DateTime? @map("date_end") @db.Date
+  platforms    String?  // JSON array string e.g. ["Meta Ads","Google Ads"]
+  status       String   @default("success") // success | error
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("upload_logs")
+}
+
 
 model Goal {
   id          String   @id @default(uuid())
