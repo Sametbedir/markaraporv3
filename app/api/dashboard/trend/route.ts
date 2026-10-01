@@ -35,20 +35,15 @@ export async function GET(req: NextRequest) {
   const metrics = await prisma.dailyMetric.groupBy({
     by: ['date'],
     where: { userId, date: { gte: start, lte: end } },
-    _sum: { spend: true, revenue: true, impressions: true, clicks: true, conversions: true },
+    _sum: { spend: true, revenue: true, impressions: true, clicks: true },
     orderBy: { date: 'asc' },
   });
 
-  let orders: Array<{ d: string; cnt: number }> = [];
-  try {
-    orders = await prisma.$queryRaw<Array<{ d: string; cnt: number }>>`
-      SELECT DATE(order_date) as d, SUM(COALESCE(item_count, 1))::int as cnt
-      FROM orders WHERE user_id = ${userId}
-        AND order_date >= ${start} AND order_date <= ${end}
-      GROUP BY DATE(order_date) ORDER BY d`;
-  } catch {
-    orders = [];
-  }
+  const orders = await prisma.$queryRaw<Array<{ d: string; cnt: number }>>`
+    SELECT DATE(order_date) as d, COUNT(*)::int as cnt
+    FROM orders WHERE user_id = ${userId}
+      AND order_date >= ${start} AND order_date <= ${end}
+    GROUP BY DATE(order_date) ORDER BY d`;
 
   const orderMap: Record<string, number> = {};
   (orders ?? []).forEach((r: any) => {
@@ -63,7 +58,6 @@ export async function GET(req: NextRequest) {
       revenue: m._sum?.revenue ?? 0,
       impressions: m._sum?.impressions ?? 0,
       clicks: m._sum?.clicks ?? 0,
-      conversions: m._sum?.conversions ?? 0,
     };
   }
 
@@ -71,8 +65,8 @@ export async function GET(req: NextRequest) {
   const cur = new Date(start);
   while (cur <= end) {
     const key = cur.toISOString().split('T')[0];
-    const m = metricMap[key] ?? { spend: 0, revenue: 0, impressions: 0, clicks: 0, conversions: 0 };
-    const orderCount = orderMap[key] || m.conversions || 0;
+    const m = metricMap[key] ?? { spend: 0, revenue: 0, impressions: 0, clicks: 0 };
+    const orderCount = orderMap[key] ?? 0;
     const roas = m.spend > 0 ? m.revenue / m.spend : 0;
     result.push({
       date: key,

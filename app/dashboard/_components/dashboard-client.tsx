@@ -10,6 +10,7 @@ import ChannelPieChart from '@/components/channel-pie-chart';
 import CampaignTable from '@/components/campaign-table';
 import MonthComparison from '@/components/month-comparison';
 import HistoryChart from '@/components/history-chart';
+import PdfReportModal from '@/components/pdf-report-modal';
 import type {
   DashboardSummary, TrendDataPoint, CampaignPerformance,
   ChannelBreakdown, MonthComparisonData, HistoryPoint
@@ -26,6 +27,7 @@ export default function DashboardClient() {
   const [presetDays, setPresetDays] = useState(30);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   /* ── Data state ── */
   const [loading, setLoading] = useState(true);
@@ -159,9 +161,9 @@ export default function DashboardClient() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Yenile
           </button>
-          <button onClick={() => window.print()}
-            className="btn-secondary text-xs flex items-center gap-1 px-3 py-1.5 print-hidden">
-            <FileDown className="w-3.5 h-3.5" /> PDF
+          <button onClick={() => setShowPdfModal(true)}
+            className="btn-secondary text-xs flex items-center gap-1 px-3 py-1.5 print-hidden shadow-sm hover:border-primary/50 transition">
+            <FileDown className="w-3.5 h-3.5 text-primary" /> PDF Rapor
           </button>
         </div>
       </div>
@@ -206,6 +208,18 @@ export default function DashboardClient() {
           <CampaignTable data={campaigns} loading={loading} />
         </>
       )}
+
+      {/* ── Profesyonel PDF Rapor Çıktısı Modalı ── */}
+      <PdfReportModal
+        isOpen={showPdfModal}
+        onClose={() => setShowPdfModal(false)}
+        summary={summary}
+        campaigns={campaigns}
+        channels={channels}
+        dateStart={activeStart}
+        dateEnd={activeEnd}
+      />
     </div>
   );
 }
+

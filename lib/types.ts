@@ -8,6 +8,8 @@ export interface DashboardSummary {
   avg_roas: number;
   avg_ctr: number;
   avg_cpc: number;
+  avg_aov?: number;
+  avg_cac?: number;
   total_profit: number;
   profit_margin: number;
   net_roas: number;
@@ -15,6 +17,7 @@ export interface DashboardSummary {
   total_shipping: number;
   total_returns: number;
   total_cogs: number;
+  daily_revenue?: number;
 }
 
 export interface TrendDataPoint {
