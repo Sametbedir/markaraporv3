@@ -15,6 +15,9 @@ export interface DashboardSummary {
   total_shipping: number;
   total_returns: number;
   total_cogs: number;
+  avg_aov?: number;
+  avg_cac?: number;
+  daily_revenue?: number;
 }
 
 export interface TrendDataPoint {
