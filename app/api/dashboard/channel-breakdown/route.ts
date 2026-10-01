@@ -33,17 +33,20 @@ export async function GET(req: NextRequest) {
     by: ['channel'],
     where: { userId, orderDate: { gte: start, lte: end } },
     _count: { id: true },
-    _sum: { totalPrice: true },
+    _sum: { totalPrice: true, itemCount: true },
   });
 
-  const totalOrders = (channels ?? []).reduce((s: number, c: any) => s + (c._count?.id ?? 0), 0) || 1;
+  const totalOrders = (channels ?? []).reduce((s: number, c: any) => s + (c._sum?.itemCount || c._count?.id || 0), 0) || 1;
 
-  const result = (channels ?? []).map((c: any) => ({
-    channel: c.channel,
-    order_count: c._count?.id ?? 0,
-    total_revenue: Math.round((c._sum?.totalPrice ?? 0) * 100) / 100,
-    percentage: Math.round(((c._count?.id ?? 0) / totalOrders) * 1000) / 10,
-  }));
+  const result = (channels ?? []).map((c: any) => {
+    const count = c._sum?.itemCount || c._count?.id || 0;
+    return {
+      channel: c.channel,
+      order_count: count,
+      total_revenue: Math.round((c._sum?.totalPrice ?? 0) * 100) / 100,
+      percentage: Math.round((count / totalOrders) * 1000) / 10,
+    };
+  });
 
   return NextResponse.json(result);
 }
