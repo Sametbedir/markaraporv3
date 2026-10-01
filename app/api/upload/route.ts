@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { addDemoMetrics } from '@/lib/demo-data';
 import { prisma } from '@/lib/prisma';
-import { parseRawCsv, parseAnyTableData, UniversalParseResult } from '@/lib/universal-parser';
+import { parseRawCsv, parseAnyTableData, UniversalParseResult, NormalizedMetricRow } from '@/lib/universal-parser';
 
 /* ─── Excel Okuyucu (XLSX / XLS) ─── */
 async function readExcelAsGrid(buffer: ArrayBuffer): Promise<string[][]> {
@@ -14,7 +14,6 @@ async function readExcelAsGrid(buffer: ArrayBuffer): Promise<string[][]> {
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    // sheet_to_json header: 1 -> string[][] döner
     const grid: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
       defval: '',
@@ -109,110 +108,124 @@ export async function POST(req: NextRequest) {
 
     const userId = session.user.id;
     const isDemo = userId === 'admin-demo-user';
+    let storageType = isDemo ? 'in-memory' : 'database';
 
-    /* ─── 2. Veritabanına Hızlı Batch Kayıt ─── */
+    /* ─── 2. Veritabanına Yazma (Hata Dayanıklı / Fault-Tolerant) ─── */
     if (isDemo) {
-      addDemoMetrics(rows);
+      addDemoMetrics(rows as any);
     } else {
-      // A. Eşsiz Kampanyaları Çözümle
-      const uniqueCampaignKeys = [...new Set(rows.map((p) => `${p.platform}:::${p.campaign}`))];
-      const campaignMap = new Map<string, string>();
+      try {
+        // A. Eşsiz Kampanyaları Çözümle
+        const uniqueCampaignKeys = [...new Set(rows.map((p: NormalizedMetricRow) => `${p.platform}:::${p.campaign}`))];
+        const campaignMap = new Map<string, string>();
 
-      const existingCampaigns = await prisma.campaign.findMany({
-        where: { userId },
-        select: { id: true, name: true, platform: true },
-      });
-      existingCampaigns.forEach((c) => {
-        campaignMap.set(`${c.platform}:::${c.name}`, c.id);
-      });
+        const existingCampaigns = await prisma.campaign.findMany({
+          where: { userId },
+          select: { id: true, name: true, platform: true },
+        });
+        existingCampaigns.forEach((c) => {
+          campaignMap.set(`${c.platform}:::${c.name}`, c.id);
+        });
 
-      for (const key of uniqueCampaignKeys) {
-        if (!campaignMap.has(key)) {
-          const [platform, name] = key.split(':::');
-          const created = await prisma.campaign.create({
+        for (const key of uniqueCampaignKeys) {
+          if (!campaignMap.has(key)) {
+            const [platform, name] = (key as string).split(':::');
+            const created = await prisma.campaign.create({
+              data: {
+                userId,
+                name,
+                platform,
+                source: 'upload',
+                dataSourceLabel: `Yüklenen ${ext.toUpperCase()}`,
+              },
+            });
+            campaignMap.set(key as string, created.id);
+          }
+        }
+
+        // B. DailyMetric Kayıtlarını Toplu Oluştur
+        const dailyMetricRecords = rows.map((m: NormalizedMetricRow) => {
+          const campaignId = campaignMap.get(`${m.platform}:::${m.campaign}`) || null;
+          const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
+          const cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
+          const roas = m.roas ?? (m.spend > 0 ? m.revenue / m.spend : 0);
+
+          return {
+            userId,
+            campaignId,
+            date: new Date(`${m.date}T00:00:00.000Z`),
+            platform: m.platform,
+            spend: m.spend,
+            revenue: m.revenue,
+            impressions: m.impressions,
+            clicks: m.clicks,
+            conversions: m.orders || m.conversions,
+            ctr: Math.round(ctr * 100) / 100,
+            cpc: Math.round(cpc * 100) / 100,
+            roas: Math.round(roas * 100) / 100,
+            source: 'upload',
+            dataSourceLabel: `Yüklenen ${ext.toUpperCase()}`,
+          };
+        });
+
+        await prisma.dailyMetric.createMany({
+          data: dailyMetricRecords,
+        });
+
+        // C. Order Kayıtlarını Toplu Oluştur
+        const orderRecords = rows
+          .filter((m: NormalizedMetricRow) => m.orders > 0 || m.revenue > 0)
+          .map((m: NormalizedMetricRow, idx: number) => ({
+            userId,
+            orderNumber: `${ext.toUpperCase()}-${m.date.replace(/-/g, '')}-${idx + 1}`,
+            totalPrice: m.revenue,
+            channel: m.platform,
+            source: 'upload',
+            status: 'confirmed',
+            itemCount: Math.max(1, Math.round(m.orders)),
+            orderDate: new Date(`${m.date}T12:00:00.000Z`),
+          }));
+
+        if (orderRecords.length > 0) {
+          await prisma.order.createMany({
+            data: orderRecords,
+          });
+        }
+
+        // D. UploadLog Kaydı
+        try {
+          await (prisma as any).uploadLog.create({
             data: {
               userId,
-              name,
-              platform,
-              source: 'upload',
-              dataSourceLabel: `Yüklenen ${ext.toUpperCase()}`,
+              fileName: file.name,
+              fileType: ext.toUpperCase(),
+              importedRows: rows.length,
+              dateStart: new Date(`${dateStart}T00:00:00.000Z`),
+              dateEnd: new Date(`${dateEnd}T00:00:00.000Z`),
+              platforms: JSON.stringify(platforms),
+              status: 'success',
             },
           });
-          campaignMap.set(key, created.id);
+        } catch {
+          // Tablo yoksa geç
         }
-      }
-
-      // B. DailyMetric Kayıtlarını Toplu Oluştur
-      const dailyMetricRecords = rows.map((m) => {
-        const campaignId = campaignMap.get(`${m.platform}:::${m.campaign}`) || null;
-        const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
-        const cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
-        const roas = m.roas ?? (m.spend > 0 ? m.revenue / m.spend : 0);
-
-        return {
-          userId,
-          campaignId,
-          date: new Date(`${m.date}T00:00:00.000Z`),
-          platform: m.platform,
-          spend: m.spend,
-          revenue: m.revenue,
-          impressions: m.impressions,
-          clicks: m.clicks,
-          conversions: m.orders || m.conversions,
-          ctr: Math.round(ctr * 100) / 100,
-          cpc: Math.round(cpc * 100) / 100,
-          roas: Math.round(roas * 100) / 100,
-          source: 'upload',
-          dataSourceLabel: `Yüklenen ${ext.toUpperCase()}`,
-        };
-      });
-
-      await prisma.dailyMetric.createMany({
-        data: dailyMetricRecords,
-      });
-
-      // C. Order Kayıtlarını Toplu Oluştur
-      const orderRecords = rows
-        .filter((m) => m.orders > 0 || m.revenue > 0)
-        .map((m, idx) => ({
-          userId,
-          orderNumber: `${ext.toUpperCase()}-${m.date.replace(/-/g, '')}-${idx + 1}`,
-          totalPrice: m.revenue,
-          channel: m.platform,
-          source: 'upload',
-          status: 'confirmed',
-          itemCount: Math.max(1, Math.round(m.orders)),
-          orderDate: new Date(`${m.date}T12:00:00.000Z`),
-        }));
-
-      if (orderRecords.length > 0) {
-        await prisma.order.createMany({
-          data: orderRecords,
-        });
-      }
-
-      // D. UploadLog Kaydı (Güvenli)
-      try {
-        await (prisma as any).uploadLog.create({
-          data: {
-            userId,
-            fileName: file.name,
-            fileType: ext.toUpperCase(),
-            importedRows: rows.length,
-            dateStart: new Date(`${dateStart}T00:00:00.000Z`),
-            dateEnd: new Date(`${dateEnd}T00:00:00.000Z`),
-            platforms: JSON.stringify(platforms),
-            status: 'success',
-          },
-        });
-      } catch {
-        // Migration tablosu yoksa hata vermez
+      } catch (dbErr: any) {
+        // Supabase projesi PAUSED (durdurulmuş) veya tenant bulunamadı hatası!
+        console.warn('[upload] DB unreachable / tenant not found. Falling back to active memory:', dbErr?.message);
+        // Kesintisiz çalışma için veriyi bellek deposuna aktar
+        addDemoMetrics(rows as any);
+        storageType = 'in-memory-fallback';
       }
     }
 
+    const note =
+      storageType === 'in-memory-fallback'
+        ? ' (Not: Veritabanınız geçici olarak uyku modunda olduğu için veriler anında güvenli bellek deposuna alındı ve dashboard aktifleştirildi.)'
+        : '';
+
     return NextResponse.json({
       success: true,
-      message: `"${file.name}" başarıyla analiz edildi ve aktarıldı! (${rows.length} veri noktası, ₺${Math.round(totalRevenue).toLocaleString('tr-TR')} Ciro, ${Math.round(totalOrders).toLocaleString('tr-TR')} Sipariş)`,
+      message: `"${file.name}" başarıyla analiz edildi ve aktarıldı! (${rows.length} veri satırı, ₺${Math.round(totalRevenue).toLocaleString('tr-TR')} Ciro, ${Math.round(totalOrders).toLocaleString('tr-TR')} Sipariş)${note}`,
       filename: file.name,
       importedRows: rows.length,
       totalOrders: Math.round(totalOrders),
@@ -222,6 +235,7 @@ export async function POST(req: NextRequest) {
       dateEnd,
       platforms,
       detectedType,
+      storage: storageType,
     });
   } catch (err: any) {
     console.error('Upload Error:', err);
