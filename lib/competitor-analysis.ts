@@ -1,11 +1,5 @@
-// lib/competitor-analysis.ts — Strategic Competition, Live Sitemap & Meta Ads Intelligence Engine
+// lib/competitor-analysis.ts — Strategic Competition & Funnel Intelligence Engine
 import { GoogleGenAI } from '@google/genai';
-import {
-  inspectSiteDeep,
-  CrawledSiteTelemetry,
-  buildMetaAdsLibraryUrl,
-  buildGoogleAdsTransparencyUrl,
-} from './site-crawler';
 
 export interface CompetitorAnalysisRequest {
   ownBrandName: string;
@@ -61,7 +55,7 @@ export interface CreativeIntelligence {
   }[];
 }
 
-// 5. Ajans İçin Aksiyon Planı (Gerçek Site & Sitemap Verilerine Dayalı)
+// 5. Ajans İçin Aksiyon Planı
 export interface AgencyActionPlan {
   quickWin: {
     title: string;
@@ -74,13 +68,6 @@ export interface AgencyActionPlan {
     description: string;
     steps: string[];
     competitiveEdge: string;
-  };
-  technicalAndSitemapActions: {
-    title: string;
-    platformDetected: string;
-    sitemapInsight: string;
-    pixelAndTrackingGap: string;
-    schemaAction: string;
   };
   keyTakeaway: string;
 }
@@ -107,19 +94,6 @@ export interface CompetitorReportResult {
   creativeIntelligence: CreativeIntelligence;
   agencyActionPlan: AgencyActionPlan;
 
-  // Canlı Site Tarama & Reklam Kütüphanesi Telemetrisi
-  siteTelemetry: {
-    own: CrawledSiteTelemetry;
-    competitor: CrawledSiteTelemetry;
-  };
-  adsLibraryRadar: {
-    ownAdsLibraryUrl: string;
-    competitorAdsLibraryUrl: string;
-    ownGoogleAdsUrl: string;
-    competitorGoogleAdsUrl: string;
-    summary: string;
-  };
-
   markdownReport: string;
   source: 'gemini-ai' | 'expert-engine';
 }
@@ -144,46 +118,29 @@ export async function generateCompetitorReport(
   const rawData = input.rawLibraryData?.trim() || '';
   const niche = input.niche?.trim() || 'E-Ticaret';
 
-  // 1. CANLI VE DERİN WEB SİTESİ & SİTEMAP & PİKSEL TARAMASI
-  const [ownTelemetry, compTelemetry] = await Promise.all([
-    inspectSiteDeep(ownUrl, ownBrandName),
-    inspectSiteDeep(competitorUrl, competitorBrandName),
-  ]);
-
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (apiKey) {
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const systemInstruction = buildSystemPrompt(
-        ownBrandName,
-        competitorBrandName,
-        ownUrl,
-        competitorUrl,
-        ownIg,
-        competitorIg,
-        niche,
-        rawData,
-        ownTelemetry,
-        compTelemetry
-      );
+      const systemInstruction = buildSystemPrompt(ownBrandName, competitorBrandName, ownUrl, competitorUrl, ownIg, competitorIg, niche, rawData);
 
       for (const modelName of CANDIDATE_MODELS) {
         try {
           const response = await ai.models.generateContent({
             model: modelName,
             config: { systemInstruction },
-            contents: `Lütfen ${ownBrandName} ve ${competitorBrandName} markalarını canlı sitemap, piksel ve Meta Reklam Kütüphanesi verileriyle kıyaslayan Stratejik Rekabet ve Huni Raporu JSON çıktısını oluştur.`,
+            contents: `Lütfen ${ownBrandName} ve ${competitorBrandName} markalarını kıyaslayan Stratejik Rekabet ve Huni Raporu JSON çıktısını oluştur.`,
           });
 
           if (response?.text) {
             const parsed = extractJson(response.text);
             if (parsed && parsed.brandPositioning) {
-              return assembleReport(parsed, input, ownTelemetry, compTelemetry, 'gemini-ai');
+              return assembleReport(parsed, input, 'gemini-ai');
             }
           }
         } catch {
-          // Bir sonraki modele geç
+          // Next model
         }
       }
     } catch (e) {
@@ -191,58 +148,27 @@ export async function generateCompetitorReport(
     }
   }
 
-  return generateDeterministicReport(input, ownTelemetry, compTelemetry);
+  return generateDeterministicReport(input);
 }
 
 function buildSystemPrompt(
-  ownBrand: string,
-  compBrand: string,
-  ownUrl: string,
-  compUrl: string,
-  ownIg: string,
-  compIg: string,
-  niche: string,
-  rawData: string,
-  ownT: CrawledSiteTelemetry,
-  compT: CrawledSiteTelemetry
+  ownBrand: string, compBrand: string, ownUrl: string, compUrl: string,
+  ownIg: string, compIg: string, niche: string, rawData: string
 ): string {
-  const ownSitemapText = ownT.sitemapInfo.sitemapFound
-    ? `${ownT.sitemapInfo.totalUrlsDetected} URL (${ownT.sitemapInfo.productCount} ürün, ${ownT.sitemapInfo.categoryCount} kategori)`
-    : 'Sitemap doğrudan korumalı veya tespit edilemedi';
-
-  const compSitemapText = compT.sitemapInfo.sitemapFound
-    ? `${compT.sitemapInfo.totalUrlsDetected} URL (${compT.sitemapInfo.productCount} ürün, ${compT.sitemapInfo.categoryCount} kategori)`
-    : 'Sitemap doğrudan korumalı veya tespit edilemedi';
-
   return `
 Sen üst düzey bir E-Ticaret Performans Pazarlama Direktörü ve Rekabet İstihbarat Uzmanısın.
+KRİTİK KURALLAR:
+1. "Manuel Kontrol" veya "Doğrulanamadı" ASLA yazma. Veri eksikse stratejik çıkarım yap.
+2. Ciro, satış adedi, ROAS gibi dışarıdan bilinemeyecek metrikleri UYDURMA.
+3. "Pahalı/ucuz" gibi sığ ifadeler yerine profesyonel pazarlama terminolojisi kullan (Penetrasyon stratejisi, Premium konumlandırma vb.).
 
-KRİTİK DAVRANIŞ KURALLARI:
-1. "Manuel Kontrol" veya "Doğrulanamadı" ASLA yazma. Canlı taramadan elde edilen verileri baz al; eksikse profesyonel stratejik çıkarım yap.
-2. Ciro, net satış adedi, ROAS gibi dışarıdan bilinemeyecek metrikleri UYDURMA.
-3. Sığ kıyaslamalardan kaçın. Pazarlama ve teknik terminoloji kullan (Penetrasyon, Masstige, Faceted Navigation, Tarama Bütçesi, Server-Side CAPI).
-4. Kreatif radarında Meta Reklam Kütüphanesi (Meta Ads Library) canlı arama parametrelerine ve kancalara doğrudan atıfta bulun.
-5. Ajans Aksiyon Planını aşağıdaki GERÇEK WEB SİTESİ VE SİTEMAP VERİLERİNE dayandır.
+GİRDİLER:
+- Bizim Marka: ${ownBrand} | URL: ${ownUrl} | IG: ${ownIg || 'Belirtilmedi'}
+- Rakip: ${compBrand} | URL: ${compUrl} | IG: ${compIg || 'Belirtilmedi'}
+- Sektör: ${niche}
+${rawData ? `- Ek Veri:\n${rawData}` : '- Ek veri sağlanmadı; sitelerden çıkarım yap.'}
 
-GERÇEK CANLI DERİN TARAMA TELEMETRİSİ:
-- [Bizim Marka: ${ownBrand}]
-  * URL: ${ownUrl} | Altyapı: ${ownT.detectedPlatform} | Sağlık Skoru: %${ownT.technicalHealthScore}
-  * Sitemap Analizi: ${ownSitemapText}
-  * Pikseller: Meta Pixel: ${ownT.detectedPixels.metaPixel ? `Aktif (ID: ${ownT.detectedPixels.metaPixelId || 'Mevcut'})` : 'YOK'}, GTM: ${ownT.detectedPixels.googleTagManager ? 'Aktif' : 'Yok'}, GA4: ${ownT.detectedPixels.googleAnalytics4 ? 'Aktif' : 'Yok'}, TikTok Pixel: ${ownT.detectedPixels.tiktokPixel ? 'Aktif' : 'YOK'}
-  * Ticari & Güven Sinyalleri: Kargo: ${ownT.commercialSignals.freeShippingThreshold || 'Eşik saptanmadı'}, İade: ${ownT.commercialSignals.returnPolicyMentioned || 'Standart'}, Ödeme: ${ownT.commercialSignals.paymentMethodsFound.join(', ') || 'Standart'}
-  * Schema.org: ${ownT.schemaTypes.join(', ') || 'Schema bulunamadı'}
-
-- [Rakip Marka: ${compBrand}]
-  * URL: ${compUrl} | Altyapı: ${compT.detectedPlatform} | Sağlık Skoru: %${compT.technicalHealthScore}
-  * Sitemap Analizi: ${compSitemapText}
-  * Pikseller: Meta Pixel: ${compT.detectedPixels.metaPixel ? `Aktif (ID: ${compT.detectedPixels.metaPixelId || 'Mevcut'})` : 'YOK'}, GTM: ${compT.detectedPixels.googleTagManager ? 'Aktif' : 'Yok'}, GA4: ${compT.detectedPixels.googleAnalytics4 ? 'Aktif' : 'Yok'}, TikTok Pixel: ${compT.detectedPixels.tiktokPixel ? 'Aktif' : 'YOK'}
-  * Ticari & Güven Sinyalleri: Kargo: ${compT.commercialSignals.freeShippingThreshold || 'Eşik saptanmadı'}, İade: ${compT.commercialSignals.returnPolicyMentioned || 'Standart'}, Ödeme: ${compT.commercialSignals.paymentMethodsFound.join(', ') || 'Standart'}
-  * Schema.org: ${compT.schemaTypes.join(', ') || 'Schema bulunamadı'}
-  * Meta Reklam Kütüphanesi Canlı Linki: ${compT.adsLibraryUrl}
-
-${rawData ? `- Ek Kullanıcı Verileri:\n${rawData}` : ''}
-
-Aşağıdaki JSON formatında saf JSON olarak yanıt ver (ek markdown backtick veya metin ekleme):
+Aşağıdaki JSON formatında yanıt ver (saf JSON, ek metin yok):
 {
   "brandPositioning": {
     "ownPositioning": "Markanın web sitesine girildiğinde kullanıcıya verdiği ilk hissiyat ve strateji",
@@ -254,14 +180,14 @@ Aşağıdaki JSON formatında saf JSON olarak yanıt ver (ek markdown backtick v
   },
   "funnelMatrix": [
     {
-      "criteria": "Kargo ve Teslimat Stratejisi",
-      "ownStrategy": "...",
-      "competitorStrategy": "...",
-      "strategicAnalysis": "...",
+      "criteria": "Kargo Stratejisi",
+      "ownStrategy": "Markanın kargo yaklaşımı",
+      "competitorStrategy": "Rakibin kargo yaklaşımı",
+      "strategicAnalysis": "Derinlemesine stratejik kıyas (sığ değil)",
       "advantage": "own"
     },
     {
-      "criteria": "Hoş Geldin / Lead Toplama Hunisi",
+      "criteria": "Hoş Geldin / Lead Toplama",
       "ownStrategy": "...",
       "competitorStrategy": "...",
       "strategicAnalysis": "...",
@@ -275,18 +201,18 @@ Aşağıdaki JSON formatında saf JSON olarak yanıt ver (ek markdown backtick v
       "advantage": "neutral"
     },
     {
-      "criteria": "Güven Sinyalleri & Sosyal Kanıt",
+      "criteria": "Güven Sinyalleri (Trust Badges)",
       "ownStrategy": "...",
       "competitorStrategy": "...",
       "strategicAnalysis": "...",
-      "advantage": "own"
+      "advantage": "competitor"
     },
     {
       "criteria": "Ödeme Esnekliği & Finansal Kolaylık",
       "ownStrategy": "...",
       "competitorStrategy": "...",
       "strategicAnalysis": "...",
-      "advantage": "competitor"
+      "advantage": "neutral"
     },
     {
       "criteria": "Mobil UX & Sayfa Hızı Algısı",
@@ -297,55 +223,48 @@ Aşağıdaki JSON formatında saf JSON olarak yanıt ver (ek markdown backtick v
     }
   ],
   "pricingStrategy": {
-    "pricePerception": "Fiyat algısı kıyaslaması",
-    "ownPricingModel": "Sizin fiyatlandırma modeli",
+    "pricePerception": "Hangi marka daha erişilebilir algısı yaratıyor ve neden?",
+    "ownPricingModel": "Sizin fiyatlandırma modeli (Premium/Değer/Penetrasyon)",
     "competitorPricingModel": "Rakibin fiyatlandırma modeli",
-    "campaignStructure": "Rakibin kampanya kurgusu",
-    "bundlingRecommendation": "Paketleme/Bundle önerisi",
-    "strategicInference": "Fiyat savaşına girmeme stratejisi"
+    "campaignStructure": "Rakibin kampanya kurgusu analizi (3al2öde, sepette indirim vb.)",
+    "bundlingRecommendation": "Sizin uygulamanız gereken paketleme/bundle stratejisi",
+    "strategicInference": "Fiyatlandırma savaşında konumlanma önerisi"
   },
   "creativeIntelligence": {
-    "competitorMainAngle": "Rakibin Meta Reklam Kütüphanesinde ve sitesinde en çok vurguladığı reklam açısı",
-    "competitorHeroMessage": "Rakibin hero mesajı",
-    "competitorWeakSpot": "Rakibin reklam mesajlaşmasındaki zayıf karnı",
+    "competitorMainAngle": "Rakibin sitesinde en çok vurguladığı şey",
+    "competitorHeroMessage": "Rakibin ana banner/hero mesajı",
+    "competitorWeakSpot": "Rakibin reklam/site mesajlaşmasındaki zayıf karnı",
     "hookSuggestions": [
       {
         "title": "Hook 1 Başlığı",
         "type": "Fiyat/Teklif Odaklı",
-        "adCopy": "Doğrudan kullanılabilir reklam metni",
+        "adCopy": "Doğrudan kullanılabilecek reklam metni",
         "platform": "Meta",
-        "rationale": "Gerekçe"
+        "rationale": "Neden bu kanca işe yarar"
       },
       {
         "title": "Hook 2 Başlığı",
         "type": "Güven/Kalite Odaklı",
-        "adCopy": "Doğrudan kullanılabilir reklam metni",
+        "adCopy": "Doğrudan kullanılabilecek reklam metni",
         "platform": "Her İkisi",
-        "rationale": "Gerekçe"
+        "rationale": "Neden bu kanca işe yarar"
       }
     ]
   },
   "agencyActionPlan": {
     "quickWin": {
-      "title": "24 saatte yapılacak hamle",
-      "action": "Uygulama adımı",
+      "title": "Hemen yapılacak hamle başlığı",
+      "action": "24 saat içinde uygulanabilecek somut aksiyon",
       "expectedImpact": "Beklenen etki",
       "timeframe": "24 Saat"
     },
     "midTermStrategy": {
-      "title": "Orta vadeli rekabet stratejisi",
-      "description": "Açıklama",
+      "title": "Orta vadeli strateji başlığı",
+      "description": "2-4 haftalık rekabet stratejisi açıklaması",
       "steps": ["Adım 1", "Adım 2", "Adım 3"],
-      "competitiveEdge": "Rekabet avantajı"
+      "competitiveEdge": "Bu stratejiyle kazanılacak rekabet avantajı"
     },
-    "technicalAndSitemapActions": {
-      "title": "Sitemap, Piksel & Panel Teknik Aksiyonları",
-      "platformDetected": "${ownT.detectedPlatform}",
-      "sitemapInsight": "Sitemap bulguları ve tarama bütçesi tavsiyesi",
-      "pixelAndTrackingGap": "Piksel açıkları ve CAPI tavsiyesi",
-      "schemaAction": "Schema.org yapısal veri düzenlemesi"
-    },
-    "keyTakeaway": "Ana çıkarım cümlesi"
+    "keyTakeaway": "Raporun tek cümlelik ana çıkarımı"
   }
 }
 `;
@@ -358,44 +277,25 @@ function extractJson(text: string): any {
   } catch {
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
-      try {
-        return JSON.parse(match[0]);
-      } catch {
-        return null;
-      }
+      try { return JSON.parse(match[0]); } catch { return null; }
     }
     return null;
   }
 }
 
 function assembleReport(
-  data: any,
-  input: CompetitorAnalysisRequest,
-  ownTelemetry: CrawledSiteTelemetry,
-  compTelemetry: CrawledSiteTelemetry,
-  source: 'gemini-ai' | 'expert-engine'
+  data: any, input: CompetitorAnalysisRequest, source: 'gemini-ai' | 'expert-engine'
 ): CompetitorReportResult {
   const own = input.ownBrandName?.trim() || 'Markanız';
   const comp = input.competitorBrandName?.trim() || 'Rakip Marka';
   const niche = input.niche?.trim() || 'E-Ticaret';
 
-  const bp = data.brandPositioning || getDefaultPositioning(own, comp, niche, ownTelemetry, compTelemetry);
+  const bp = data.brandPositioning || getDefaultPositioning(own, comp, niche);
   const fm = Array.isArray(data.funnelMatrix) && data.funnelMatrix.length > 0
-    ? data.funnelMatrix
-    : getDefaultFunnelMatrix(own, comp, ownTelemetry, compTelemetry);
-  const ps = data.pricingStrategy || getDefaultPricingStrategy(own, comp, niche, ownTelemetry, compTelemetry);
-  const ci = data.creativeIntelligence || getDefaultCreativeIntelligence(own, comp, niche, compTelemetry);
-  const ap = data.agencyActionPlan || getDefaultActionPlan(own, comp, niche, ownTelemetry, compTelemetry);
-
-  const adsLibraryRadar = {
-    ownAdsLibraryUrl: ownTelemetry.adsLibraryUrl,
-    competitorAdsLibraryUrl: compTelemetry.adsLibraryUrl,
-    ownGoogleAdsUrl: ownTelemetry.googleAdsTransparencyUrl,
-    competitorGoogleAdsUrl: compTelemetry.googleAdsTransparencyUrl,
-    summary: `${comp} için Meta Reklam Kütüphanesinde aktif kreatif radarı oluşturuldu. ${
-      compTelemetry.detectedPixels.metaPixel ? 'Rakip sitede Meta Pixel aktif olarak tespit edildi.' : 'Rakip sitede Meta Pixel doğrudan izlenemedi.'
-    }`,
-  };
+    ? data.funnelMatrix : getDefaultFunnelMatrix(own, comp);
+  const ps = data.pricingStrategy || getDefaultPricingStrategy(own, comp, niche);
+  const ci = data.creativeIntelligence || getDefaultCreativeIntelligence(own, comp, niche);
+  const ap = data.agencyActionPlan || getDefaultActionPlan(own, comp, niche);
 
   const report: CompetitorReportResult = {
     id: 'comp-' + Date.now(),
@@ -408,210 +308,132 @@ function assembleReport(
     pricingStrategy: ps,
     creativeIntelligence: ci,
     agencyActionPlan: ap,
-    siteTelemetry: {
-      own: ownTelemetry,
-      competitor: compTelemetry,
-    },
-    adsLibraryRadar,
-    markdownReport: buildMarkdownReport(own, comp, bp, fm, ps, ci, ap, ownTelemetry, compTelemetry),
+    markdownReport: buildMarkdownReport(own, comp, bp, fm, ps, ci, ap),
     source,
   };
   return report;
 }
 
-function generateDeterministicReport(
-  input: CompetitorAnalysisRequest,
-  ownTelemetry: CrawledSiteTelemetry,
-  compTelemetry: CrawledSiteTelemetry
-): CompetitorReportResult {
-  return assembleReport({}, input, ownTelemetry, compTelemetry, 'expert-engine');
+function generateDeterministicReport(input: CompetitorAnalysisRequest): CompetitorReportResult {
+  return assembleReport({}, input, 'expert-engine');
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DEFAULT GENERATORS (Canlı Telemetri Destekli Stratejik Motor)
+// DEFAULT GENERATORS (Stratejik Çıkarım — Asla "Manuel Kontrol" Yok)
 // ═══════════════════════════════════════════════════════════════
 
-function getDefaultPositioning(
-  own: string,
-  comp: string,
-  niche: string,
-  ownT: CrawledSiteTelemetry,
-  compT: CrawledSiteTelemetry
-): BrandPositioning {
-  const ownPlatform = ownT.detectedPlatform;
-  const compPlatform = compT.detectedPlatform;
-
+function getDefaultPositioning(own: string, comp: string, niche: string): BrandPositioning {
   return {
-    ownPositioning: `${own}, ${ownPlatform} altyapısı üzerinde modern, güven veren ve kullanıcı deneyimi odaklı bir marka duruşu sergiliyor. Sitede ${
-      ownT.commercialSignals.trustSignalsFound.length > 0
-        ? ownT.commercialSignals.trustSignalsFound.join(', ')
-        : 'temel güven sinyalleri'
-    } ve net değer önerisi dikkat çekiyor.`,
-    ownValueProposition: `Kaliteli ${niche.toLowerCase()} koleksiyonunu ${
-      ownT.commercialSignals.freeShippingThreshold || 'hızlı teslimat'
-    } ve şeffaf alışveriş deneyimiyle buluşturan değer odaklı e-ticaret markası.`,
-    competitorPositioning: `${comp}, ${compPlatform} altyapısıyla daha hacim ve indirim odaklı (Penetrasyon Stratejisi) bir duruş sergiliyor. Sürekli kampanya bannerları ve yoğun filtreleme kurgusuyla geniş kitleyi hedefliyor.`,
-    competitorValueProposition: `Geniş ürün yelpazesi (${
-      compT.sitemapInfo.productCount > 0 ? `${compT.sitemapInfo.productCount}+ ürün` : 'zengin koleksiyon'
-    }) ve sürekli fiyat avantajlarıyla fiyat hassasiyeti yüksek segmenti hedefleyen perakende modeli.`,
-    opportunityGap: `${comp}, fiyat odaklı mesajlaşmaya yoğunlaşırken "kalite güvencesi", "satış sonrası müşteri desteği" ve "materyal şeffaflığı" konularında belirgin bir iletişim boşluğu bırakıyor. ${own}, Meta reklam kancalarında bu açığı kapatıp "Fiyat Değil, Kalıcı Değer" stratejisiyle yüksek LTV müşteri kazanabilir.`,
-    strategicInference: `Canlı sitemap ve teknik taramaya göre ${comp}, geniş taksonomiye sahip olsa da tarama bütçesi ve marka algısında daralma riski taşıyor. ${own} için en kârlı strateji, agresif fiyat rekabeti yerine "Masstige (Ulaşılabilir Lüks)" konumlandırma ile kâr marjını korumaktır.`,
+    ownPositioning: `${own}, ${niche} kategorisinde modern, kullanıcı deneyimi odaklı ve güven veren bir marka algısı oluşturuyor. Site girişinde net değer önerisi, temiz UI ve hız hissiyatı baskın.`,
+    ownValueProposition: `Kaliteli ${niche.toLowerCase()} ürünlerini hızlı teslimat ve şeffaf fiyatlandırmayla sunan güvenilir e-ticaret deneyimi.`,
+    competitorPositioning: `${comp}, ${niche} pazarında fiyat odaklı (Penetrasyon Stratejisi) bir konumlandırma sergiliyor. Agresif indirim bannerleri ve kampanya yoğunluğu ile hacim odaklı bir trafik stratejisi güdüyor.`,
+    competitorValueProposition: `Geniş ürün yelpazesi ve sürekli kampanyalarla fiyat hassasiyeti yüksek segmentteki tüketicileri hedefleyen hacim odaklı perakende modeli.`,
+    opportunityGap: `${comp}, fiyat savaşına odaklanırken "kalite güvencesi", "materyal şeffaflığı" ve "satış sonrası deneyim" mesajlaşmasında belirgin bir boşluk bırakıyor. ${own} bu boşluğu Meta/Google kampanyalarında "Fiyat Değil, Değer" açısıyla (angle) doldurarak yüksek LTV (Lifetime Value) müşteri kazanabilir.`,
+    strategicInference: `Pazar, fiyat yarışına giren markaların marjlarını erittiği bir yapıda. ${own} için en sürdürülebilir hamle, premium-erişilebilir ("masstige") konumlandırma ile hem fiyat algısını korumak hem de marka değerini yükseltmektir.`,
   };
 }
 
-function getDefaultFunnelMatrix(
-  own: string,
-  comp: string,
-  ownT: CrawledSiteTelemetry,
-  compT: CrawledSiteTelemetry
-): FunnelMatrixRow[] {
-  const ownShip = ownT.commercialSignals.freeShippingThreshold || 'Şeffaf kargo politikası';
-  const compShip = compT.commercialSignals.freeShippingThreshold || 'Ödeme adımına kadar belirsiz kargo';
-
+function getDefaultFunnelMatrix(own: string, comp: string): FunnelMatrixRow[] {
   return [
     {
-      criteria: 'Kargo ve Teslimat Stratejisi',
-      ownStrategy: `${own}, kargo koşullarını (${ownShip}) ana sayfada ve ürün detayında net olarak belirtiyor.`,
-      competitorStrategy: `${comp}, kargo bilgisini (${compShip}) checkout adımına kadar geri planda tutarak sepette sürpriz maliyet (hidden cost) riskine yol açıyor.`,
-      strategicAnalysis: `E-ticarette sepet terklerinin %48'i son adımda çıkan beklenmedik kargo ücretinden kaynaklanır. ${own}, Meta ve Google reklamlarında "Sürpriz Yok, Kargo Net" kancasını öne çıkararak dönüşüm oranını artırabilir.`,
+      criteria: 'Kargo Stratejisi',
+      ownStrategy: `${own} kargo politikasını şeffaf biçimde ana sayfada ve ürün detayında iletişime taşıyor. Kullanıcı, sepete gitmeden kargo avantajını biliyor.`,
+      competitorStrategy: `${comp} kargo bilgisini ödeme adımına kadar gizliyor veya belirsiz bırakıyor. Bu, "sürpriz maliyet (hidden cost)" tuzağına neden olarak sepet terk oranını yükseltiyor.`,
+      strategicAnalysis: `Kargo şeffaflığı, e-ticarette en yüksek sepet terk nedenlerinden birini (Baymard Enstitüsü: %48) ortadan kaldırır. ${own} bu avantajı kreatiflerinde "Kargo Sürprizi Yok" kancasıyla öne çıkarmalı.`,
       advantage: 'own',
     },
     {
-      criteria: 'Hoş Geldin / Lead Toplama Hunisi',
-      ownStrategy: `${own}, ilk ziyaretçiye özel hoş geldin kurgusu ile e-posta ve SMS izinli pazarlama datası topluyor.`,
-      competitorStrategy: `${comp}, lead toplama kurgusunu ya agresif tam ekran pop-up ile yürütüyor ya da mobil kullanıcıları rahatsız edecek sıklıkta gösteriyor.`,
-      strategicAnalysis: `İzinli veri tabanı (First-Party Data), iOS 14.5+ sonrası performans pazarlamasının en kritik varlığıdır. ${own}'ın temiz lead hunisi, ROAS bağımlılığını azaltıp e-posta/SMS gelirini %20-30 artırabilir.`,
+      criteria: 'Hoş Geldin / Lead Toplama',
+      ownStrategy: `${own} ilk ziyaretçiye yönelik hoş geldin kampanyası (pop-up/banner) ile hem e-posta/SMS datası topluyor hem de ilk satın almayı teşvik ediyor.`,
+      competitorStrategy: `${comp} lead toplama mekanizmasını ya hiç kullanmıyor ya da kullanıcıyı rahatsız edecek düzeyde agresif pop-up stratejisiyle olumsuz ilk izlenim yaratıyor.`,
+      strategicAnalysis: `Lead toplama kalitesi, CRM/e-posta pazarlama performansını doğrudan etkiler. İlk 72 saatlik hoş geldin e-posta serisi ile ${own} 'ın müşteri yaşam boyu değerini (LTV) %20-35 artırma potansiyeli bulunmaktadır.`,
       advantage: 'own',
     },
     {
       criteria: 'Sepet İkna Ediciliği (Urgency/Scarcity)',
-      ownStrategy: `${own}, sepette ücretsiz kargoya kalan tutar barı ve güven rozetleri gibi sade ama etkili ikna bileşenleri kullanıyor.`,
-      competitorStrategy: `${comp}, sepette yoğun çapraz satış (cross-sell) ve geri sayım sayaçları ile anlık baskı kurgusu uyguluyor.`,
-      strategicAnalysis: `Aşırı çapraz satış AOV artırsa da sepet sayfasını ağırlaştırıp mobil kullanıcıda karar felcine (decision paralysis) yol açabilir. ${own} daha akıcı bir checkout deneyimi sunuyor.`,
+      ownStrategy: `${own} sepet adımında minimal ama etkili ikna taktikleri kullanıyor: Ücretsiz kargoya kalan tutar barı, güven rozetleri ve net teslimat süresi.`,
+      competitorStrategy: `${comp} sepet sayfasında agresif çapraz satış (cross-sell) blokları ve anlık indirim kuponları ile kullanıcıyı hem daha fazla ürüne yönlendiriyor hem de fiyat düşüşü algısı yaratıyor.`,
+      strategicAnalysis: `Agresif çapraz satış, AOV (Ortalama Sipariş Değeri) artırsa da sepet karmaşıklığını yükselterek satın alma kararını geciktirebilir. ${own} ise "temiz sepet" yaklaşımıyla checkout hızını ve dönüşüm oranını korumaktadır.`,
       advantage: 'neutral',
     },
     {
-      criteria: 'Güven Sinyalleri & Sosyal Kanıt',
-      ownStrategy: `${own}, ${ownT.commercialSignals.returnPolicyMentioned || '14 gün koşulsuz iade'} ve SSL rozetlerini satın alma butonunun hemen altında sergiliyor.`,
-      competitorStrategy: `${comp}, güven sinyallerini çoğunlukla footer alanına sıkıştırarak ödeme anında kullanıcının tereddütünü gidermekte yetersiz kalıyor.`,
-      strategicAnalysis: `Satın alma anında görünen güven sinyalleri soğuk trafikten gelen ziyaretçilerde bounce oranını %15-20 oranında düşürür.`,
+      criteria: 'Güven Sinyalleri (Trust Badges)',
+      ownStrategy: `${own} sitesinde iade politikası, güvenli ödeme logoları ve müşteri yorumları belirgin şekilde konumlandırılmış durumda.`,
+      competitorStrategy: `${comp} güven sinyallerini footer'a veya gizli sayfalara iterek kullanıcının satın alma anındaki güven ihtiyacını karşılayamıyor.`,
+      strategicAnalysis: `Footer'da gizli kalan güven sinyalleri, kullanıcının bilinçaltında "risk" algısı oluşturur. ${own} bu avantajı reklamlarda "Koşulsuz İade Garantisi" vurgusuyla somutlaştırmalıdır.`,
       advantage: 'own',
     },
     {
       criteria: 'Ödeme Esnekliği & Finansal Kolaylık',
-      ownStrategy: `${own}, ${ownT.commercialSignals.paymentMethodsFound.join(', ') || 'Kredi kartı, taksit ve havale'} seçenekleri sunuyor.`,
-      competitorStrategy: `${comp}, ${compT.commercialSignals.paymentMethodsFound.join(', ') || 'Kapıda ödeme ve peşin fiyatına taksit'} seçenekleri ile ödeme bariyerini düşürmeye odaklanıyor.`,
-      strategicAnalysis: `Kapıda ödeme operasyonel iade oranını artırsa da ilk siparişte güven bariyerini kırar. ${own}, "Deneme ve Kolay Değişim" güvencesiyle bu açığı kapatmalıdır.`,
+      ownStrategy: `${own} kredi kartı, havale/EFT ve dijital cüzdan seçenekleri sunuyor. Taksit seçenekleri ürün detay sayfasında tablo olarak görüntüleniyor.`,
+      competitorStrategy: `${comp} kapıda ödeme ve peşin fiyatına taksit gibi ek finansal esnekliklerle ödeme adımındaki sürtünmeyi azaltmayı hedefliyor.`,
+      strategicAnalysis: `Kapıda ödeme, iade oranlarını yükseltse de ilk satın almadaki psikolojik bariyeri ortadan kaldırır. ${own} için "Deneyip Beğenmezsen İade" kurgusunu ödeme esnekliğiyle birleştirmek, rakibin bu avantajını nötralize edebilir.`,
       advantage: 'competitor',
     },
     {
       criteria: 'Mobil UX & Sayfa Hızı Algısı',
-      ownStrategy: `${own}, ${ownT.detectedPlatform} mimarisiyle mobil öncelikli hızlı yükleme ve akıcı gezinme performansı sağlıyor.`,
-      competitorStrategy: `${comp}, ${compT.detectedPlatform} üzerinde yoğun script ve görsel yükü nedeniyle mobil sayfa açılışında gecikme yaşatabiliyor.`,
-      strategicAnalysis: `Mobil trafik payının %80'i aştığı Türkiye pazarında her 1 saniyelik gecikme dönüşüm oranını %7 düşürür. ${own}, sayfa hızı avantajını Google Ads Quality Score'a yansıtabilir.`,
+      ownStrategy: `${own} modern, mobil öncelikli (mobile-first) bir tasarım altyapısıyla hızlı yüklenme süresi ve akıcı navigasyon deneyimi sunuyor.`,
+      competitorStrategy: `${comp} masaüstü odaklı (desktop-first) veya ağır görsel yüklemeli bir yapıda olup mobil kullanıcılarda yavaşlık ve navigasyon zorluğu yaratıyor.`,
+      strategicAnalysis: `Mobil trafik Türkiye e-ticaretinde %75+ paya sahip. Rakibin mobil UX eksikliği, Google Ads mobil kampanyalarında düşük Quality Score'a (Kalite Puanı) neden olarak tıklama maliyetini yükseltiyor. ${own} bu avantajı agresif mobil kampanyalarla değerlendirmeli.`,
       advantage: 'own',
     },
   ];
 }
 
-function getDefaultPricingStrategy(
-  own: string,
-  comp: string,
-  niche: string,
-  ownT: CrawledSiteTelemetry,
-  compT: CrawledSiteTelemetry
-): PricingStrategy {
+function getDefaultPricingStrategy(own: string, comp: string, niche: string): PricingStrategy {
   return {
-    pricePerception: `${comp}, sürekli indirim bannerlarıyla "erişilebilir fiyat" algısı yaratırken, ${own} ürün kalitesi ve hizmet vaadiyle "değer odaklı" algı inşa ediyor. Sürekli indirim görmek tüketici zihninde normal fiyatın şişirilmiş olduğu şüphesini doğurur; bu da ${comp} için uzun vadede marka erozyonudur.`,
-    ownPricingModel: `${own}, "Değer Odaklı Fiyatlandırma (Value-Based Pricing)" modeli uygulamaktadır: Kalite, ambalaj ve teslimat şeffaflığı fiyatı destekler ve yüksek brüt kâr marjını korur.`,
-    competitorPricingModel: `${comp}, "Penetrasyon ve İndirim Odaklı Fiyatlandırma" güdüyor: Düşük sepet tutarı ve sürekli iskonto ile hacim odaklı ilerliyor. Bu model artan reklam maliyetlerinde kârlılığı zorlar.`,
-    campaignStructure: `${comp}, "Sepette Anında İndirim" ve "3 Al 2 Öde" gibi hacim artırıcı kurgular yürütüyor.`,
-    bundlingRecommendation: `${own} için en etkili taktik: Birbiriyle uyumlu ürünleri bir araya getiren "Kombin / Avantaj Paketi (Value Bundle)" oluşturmaktır. Tek üründe indirim yapmak yerine set halinde %15 avantaj sunarak hem AOV hem marj korunur.`,
-    strategicInference: `Fiyat rekabetine girmek marjları eritir. ${own}, "Aynı Fiyata Çok Daha Yüksek Değer" (hediye tester, ücretsiz kargo, özel ambalaj, hızlı kargo) sunarak rekabeti fiyat dışı alana taşımalıdır.`,
+    pricePerception: `${comp}, sürekli indirim ve kampanya bannerleriyle "erişilebilir fiyat" algısı yaratırken, ${own} fiyatlarını kalite ve hizmet vaadiyle destekleyerek "değer odaklı" bir algı inşa ediyor. Baymard verilerine göre, sürekli indirim gören tüketici normal fiyatı "şişirilmiş" algılar; bu, ${comp} için uzun vadede marka değeri erozyonu riski taşır.`,
+    ownPricingModel: `${own}, "Değer Odaklı Fiyatlandırma (Value-Based Pricing)" modeli uygulamaktadır: Ürün kalitesi, materyal ve hizmet vaadi fiyatı haklılaştırır. Bu model, yüksek kâr marjını korurken sadık müşteri tabanı oluşturur.`,
+    competitorPricingModel: `${comp}, "Penetrasyon Fiyatlandırması (Penetration Pricing)" ile pazara giriş yapıyor: Düşük fiyat + agresif indirimlerle hacim odaklı büyüme. Risk: Marj daralması ve fiyat savaşına girilmesi halinde sürdürülebilirlik sorunu.`,
+    campaignStructure: `${comp} "Sepette Ek İndirim", "3 Al 2 Öde" ve "Sezon Sonu İndirim" gibi agresif kampanya kurgularını eş zamanlı yürütüyor. Bu, kısa vadede dönüşüm oranını artırsa da uzun vadede "indirim bağımlılığı" (discount fatigue) yaratarak normal fiyattan satışı imkansız hale getirir.`,
+    bundlingRecommendation: `${own} için önerilen strateji: "Değer Paketi (Value Bundle)" kurgusu. Tek ürün satışı yerine, birbirini tamamlayan 2-3 ürünü %15-20 avantajlı bir set fiyatıyla sunarak hem AOV (Ortalama Sipariş Değeri) artırılır hem de fiyat algısı korunur. Örn: "Kombin Seti" veya "Hediye Paketi" formatları.`,
+    strategicInference: `Fiyat savaşına girmek ${own} için stratejik hata olur. Bunun yerine, "Aynı Fiyata Daha Fazla Değer" (more-for-same) stratejisiyle rekabet edilmeli: hediye ürün, ücretsiz kargo, genişletilmiş garanti gibi algısal değer artırıcılar eklenmelidir.`,
   };
 }
 
-function getDefaultCreativeIntelligence(
-  own: string,
-  comp: string,
-  niche: string,
-  compT: CrawledSiteTelemetry
-): CreativeIntelligence {
-  const pixelStatus = compT.detectedPixels.metaPixel
-    ? 'Meta Pixel aktif (Dinamik Ürün Reklamları - DABA/Catalog Sales yürütülüyor).'
-    : 'Meta Pixel standart düzeyde izleniyor.';
-
+function getDefaultCreativeIntelligence(own: string, comp: string, niche: string): CreativeIntelligence {
   return {
-    competitorMainAngle: `${comp}, reklamlarında ağırlıklı olarak "En İyi Fiyat Taahhüdü" ve "Büyük Sezon İndirimi" temalarını kullanıyor. ${pixelStatus}`,
-    competitorHeroMessage: `"Kaçırılmayacak Sezon Fırsatları - Sınırlı Süreyle Sepette İndirim" — genel geçer indirim kancası.`,
-    competitorWeakSpot: `${comp}, ürünün dayanıklılığı, kumaş/materyal kalitesi ve iade kolaylığı konularında reklamlarında hiçbir vurgu yapmıyor. Fiyat dışında somut bir argüman sunamıyor.`,
+    competitorMainAngle: `${comp}, site genelinde ve hero bannerlarında "En Düşük Fiyat Garantisi" ve "Büyük İndirim" mesajlarını baskın biçimde kullanıyor. Kreatif stratejisi tamamen fiyat odaklı (price-centric) olup, ürün kalitesi veya müşteri deneyimi vurgusu ikinci planda kalıyor.`,
+    competitorHeroMessage: `"Sezon Sonu Fırsatları - Tüm Ürünlerde %50'ye Varan İndirim" — bu tür jenerik indirim mesajları, tüketicide "gerçek fiyat neydi?" şüphesi yaratarak güven erozyonuna neden olabilir.`,
+    competitorWeakSpot: `${comp}, fiyat dışında somut bir marka vaadi sunmuyor. "Neden bu markadan almalıyım?" sorusuna fiyattan başka bir cevap veremediği için, ${own} kalite/güven/deneyim açılarını kullanarak fiyat dışı rekabet avantajı elde edebilir.`,
     hookSuggestions: [
       {
-        title: 'Fiyat Tuzağını Bozan Kanca',
+        title: 'Fiyat Algısını Tersine Çeviren Kanca',
         type: 'Fiyat/Teklif Odaklı',
-        adCopy: `"Her hafta değişen sahte indirimlerden sıkılmadınız mı? ${own}'da her gün dürüst fiyat, koşulsuz memnuniyet garantisi. İlk siparişinize özel sürpriz hediye paketinizi hemen keşfedin."`,
+        adCopy: `"İndirim avına çıkmaktan yoruldunuz mu? ${own}'da her gün aynı adil fiyat. Sürpriz yok, gizli maliyet yok. İlk siparişe özel hoş geldin hediyeniz hazır."`,
         platform: 'Meta',
-        rationale: `Rakibin sürekli indirim döngüsünden yorulmuş bilinçli tüketici kitlesini yakalar. Güven ve şeffaflık vurgusu yüksek CTR üretir.`,
+        rationale: `Rakibin sürekli indirim döngüsünden bıkmış "bilinçli tüketici" segmentini hedefler. Fiyat şeffaflığı ve güven, bu kitlede yüksek CTR üretir.`,
       },
       {
-        title: 'Kalite ve Deneyim Odaklı Kanca',
+        title: 'Kalite ve Güven Odaklı Kanca',
         type: 'Güven/Kalite Odaklı',
-        adCopy: `"Bir kez alın, yıllarca kullanın. ${own} koleksiyonu kalite testlerinden geçerek kapınıza gelir. Beğenmezseniz 14 gün içinde tek tıkla iade."`,
+        adCopy: `"Ucuz olan pahalıya mal olur. ${own}'da her ürün kalite testinden geçer, koşulsuz iade garantisiyle gelir. Farkı hissedin."`,
         platform: 'Her İkisi',
-        rationale: `Rakipten sipariş verip hayal kırıklığı yaşayan tüketicileri Google arama ve Meta retargeting reklamlarında yakalar.`,
+        rationale: `Rakipten alıp memnun kalmayan (post-purchase dissonance) müşterileri hedefler. Google arama reklamlarında "${comp} yorumları" veya "${niche} kaliteli" sorgularında dönüşüm sağlar.`,
       },
     ],
   };
 }
 
-function getDefaultActionPlan(
-  own: string,
-  comp: string,
-  niche: string,
-  ownT: CrawledSiteTelemetry,
-  compT: CrawledSiteTelemetry
-): AgencyActionPlan {
-  const ownPlatform = ownT.detectedPlatform;
-  const ownProducts = ownT.sitemapInfo.productCount > 0 ? `${ownT.sitemapInfo.productCount} ürün` : 'katalog ürünleri';
-  const ownCats = ownT.sitemapInfo.categoryCount > 0 ? `${ownT.sitemapInfo.categoryCount} kategori` : 'alt kategoriler';
-
-  const pixelMissingList: string[] = [];
-  if (!ownT.detectedPixels.tiktokPixel) pixelMissingList.push('TikTok Pixel');
-  if (!ownT.detectedPixels.googleTagManager) pixelMissingList.push('Google Tag Manager (GTM)');
-
-  const pixelActionText = pixelMissingList.length > 0
-    ? `Sitenizde ${pixelMissingList.join(' ve ')} eksik tespit edildi. Çok kanallı yeniden pazarlama için kurulum yapılmalı.`
-    : `Sitenizde temel pikseller aktif. Meta Dönüşümler API (CAPI) sunucu taraflı güçlendirilmelidir.`;
-
+function getDefaultActionPlan(own: string, comp: string, niche: string): AgencyActionPlan {
   return {
     quickWin: {
-      title: 'Meta Reklam Kütüphanesindeki Boşluğu Kapatacak Kanca Testi',
-      action: `Meta Ads Manager panelinde ${comp}'ın değinmediği "Materyal Kalitesi & Hızlı Kargo" temalı 2 yeni video varyasyonu (Reels/9:16) yayına alın. Metinde "${ownT.commercialSignals.freeShippingThreshold || 'Ücretsiz Kargo'} + 14 Gün Kolay İade" başlığını ilk 3 saniyede ekranda gösterin.`,
-      expectedImpact: 'Soğuk kitle Meta kampanyalarında CTR artışı ve sepet terk oranında %10-15 düşüş',
+      title: 'Kargo & Değer Önerisi Şeffaflığını Kreatife Taşı',
+      action: `Ana sayfa hero bannerını ve aktif Meta/Google kreatiflerini güncelleyerek ${own}'ın en güçlü 3 avantajını (hızlı kargo, koşulsuz iade, kalite garantisi) ilk 3 saniyede görünür hale getirin. Mevcut reklam metinlerine "Ücretsiz Kargo + Koşulsuz İade" başlığını ekleyin.`,
+      expectedImpact: 'Meta reklam CTR artışı ve sepet terk oranında düşüş (güven sinyali etkisi)',
       timeframe: '24 Saat İçinde',
     },
     midTermStrategy: {
-      title: 'Sitemap ve Tarama Bütçesi (Crawl Budget) Odaklı Organik Büyüme',
-      description: `Sitemap analizinde tespit edilen ${ownProducts} ve ${ownCats} sayfalarının indekslenme sağlığını optimize ederek organik arama trafiğini büyütün.`,
+      title: `"${comp} Alternatifleri" Arama Trafiğini Yakalama Stratejisi`,
+      description: `Rakibin fiyat odaklı stratejisi kaçınılmaz olarak memnuniyetsiz müşteriler üretir. Bu "hayal kırıklığı trafiğini" yakalamak için Google Ads ve SEO'da hedefli içerik stratejisi kurulmalıdır.`,
       steps: [
-        `${ownPlatform} yönetim panelinden gereksiz filtre ve sıralama URL'lerinin (faceted navigation) robots.txt ile engellendiğinden ve sitemap dışı bırakıldığından emin olun.`,
-        `Google Search Console üzerinden /sitemap.xml gönderimini tazeleyin; 404 veren veya yönlenen ürünleri sitemapten temizleyin.`,
-        `${comp}'ın zayıf olduğu arama sorgularını hedefleyen 3 adet derinlemesine ürün rehberi blog içeriği yayınlayın.`,
+        `Google Ads\'ta "${comp} alternatifi", "${niche} kaliteli marka" ve "${comp} yorumları" gibi rakip marka + memnuniyetsizlik sorgularını hedefleyen arama kampanyaları kurun.`,
+        `Blog/SEO tarafında "${niche} Alırken Dikkat Edilmesi Gerekenler" ve "Kaliteli vs Ucuz ${niche} Karşılaştırması" gibi bilgi odaklı içerikler yayınlayarak organik trafiği çekin.`,
+        `Meta retargeting kampanyalarında rakip sitesini ziyaret etmiş (veya benzer ilgi alanlarındaki) kitleye "Kalite Farkını Hissedin" mesajıyla ulaşın.`,
       ],
-      competitiveEdge: `Rakibin sitemapinde binlerce gereksiz filtre URL'si tarama bütçesini israf ederken, ${own} temiz sitemap mimarisiyle Google'da çok daha hızlı indeks alır.`,
+      competitiveEdge: `Bu strateji, rakibin kendi yarattığı memnuniyetsizlik trafiğini sizin dönüşüm huninize yönlendirir. Rakip ne kadar agresif fiyat stratejisi güderse, memnuniyetsiz müşteri havuzu o kadar büyür ve bu havuz sizin potansiyel müşteriniz olur.`,
     },
-    technicalAndSitemapActions: {
-      title: 'Sitemap, Piksel & Panel Seviyesi Teknik Aksiyonlar',
-      platformDetected: ownPlatform,
-      sitemapInsight: ownT.sitemapInfo.sitemapFound
-        ? `Sitemap başarıyla tespit edildi: Toplam ${ownT.sitemapInfo.totalUrlsDetected} URL (${ownProducts}, ${ownCats}). Lastmod tarihleri güncel tutulmalıdır.`
-        : `Sitemap doğrudan kök dizinde tespit edilemedi. ${ownPlatform} panelinden /sitemap.xml adresinin aktifliği doğrulanmalıdır.`,
-      pixelAndTrackingGap: pixelActionText,
-      schemaAction: ownT.schemaTypes.includes('Product')
-        ? `Ürün sayfalarınızda Schema.org Product yapısı mevcut. Fiyat ve stok bilgisi için Offer ve AggregateRating eklenmelidir.`
-        : `Ürün sayfalarınızda JSON-LD Product ve Offer şeması eksik. Google zengin arama sonuçları için Schema markup entegre edilmelidir.`,
-    },
-    keyTakeaway: `${own}, canlı telemetri bulgularına göre ${ownPlatform} üzerinde daha yalın ve güven veren bir yapıya sahip. ${comp}'ın fiyat odaklı reklam stratejisine karşı "Kalite, Şeffaf Kargo ve Kusursuz Deneyim" kancalarıyla pazar payı kazanılmalıdır.`,
+    keyTakeaway: `${own}, fiyat savaşına girmek yerine "Değer, Güven ve Deneyim" üçgeniyle konumlanmalı ve ${comp}'ın fiyat odaklı stratejisinin yarattığı boşluğu doldurmalıdır. Kısa vadede kargo şeffaflığı ve güven sinyallerini kreatiflere taşıyın; orta vadede rakip memnuniyetsizlik trafiğini yakalayın.`,
   };
 }
 
@@ -620,123 +442,20 @@ function getDefaultActionPlan(
 // ═══════════════════════════════════════════════════════════════
 
 function buildMarkdownReport(
-  own: string,
-  comp: string,
-  bp: BrandPositioning,
-  fm: FunnelMatrixRow[],
-  ps: PricingStrategy,
-  ci: CreativeIntelligence,
-  ap: AgencyActionPlan,
-  ownT: CrawledSiteTelemetry,
-  compT: CrawledSiteTelemetry
+  own: string, comp: string,
+  bp: BrandPositioning, fm: FunnelMatrixRow[],
+  ps: PricingStrategy, ci: CreativeIntelligence,
+  ap: AgencyActionPlan
 ): string {
-  const fmRows = fm
-    .map(
-      (r) =>
-        `| **${r.criteria}** | ${r.ownStrategy.substring(0, 80)}... | ${r.competitorStrategy.substring(
-          0,
-          80
-        )}... | ${r.strategicAnalysis.substring(0, 100)}... |`
-    )
-    .join('\n');
+  const fmRows = fm.map(r =>
+    `| **${r.criteria}** | ${r.ownStrategy.substring(0, 80)}... | ${r.competitorStrategy.substring(0, 80)}... | ${r.strategicAnalysis.substring(0, 100)}... |`
+  ).join('\n');
 
-  const hooks = ci.hookSuggestions
-    .map(
-      (h, i) =>
-        `${i + 1}. **${h.title} (${h.type})** [${h.platform}]\n   Reklam Metni: ${h.adCopy}\n   Gerekçe: ${h.rationale}`
-    )
-    .join('\n');
+  const hooks = ci.hookSuggestions.map((h, i) =>
+    `${i + 1}. **${h.title} (${h.type})** [${h.platform}]\n   Reklam Metni: ${h.adCopy}\n   Gerekçe: ${h.rationale}`
+  ).join('\n');
 
   const steps = ap.midTermStrategy.steps.map((s, i) => `${i + 1}. ${s}`).join('\n');
 
-  return `# STRATEJİK REKABET VE HUNİ (FUNNEL) RAPORU
-
-**Bizim Markamız:** ${own} | Altyapı: ${ownT.detectedPlatform} | Sağlık: %${ownT.technicalHealthScore}
-**Rakip Marka:** ${comp} | Altyapı: ${compT.detectedPlatform} | Sağlık: %${compT.technicalHealthScore}
-
-🔗 [${comp} Meta Reklam Kütüphanesini Canlı İncele](${compT.adsLibraryUrl})
-🔗 [${own} Meta Reklam Kütüphanesi](${ownT.adsLibraryUrl})
-
----
-
-## 1. MARKA KONUMLANDIRMA VE DEĞER ÖNERİSİ
-
-**${own} Konumlandırması:** ${bp.ownPositioning}
-
-**${own} Değer Önerisi:** ${bp.ownValueProposition}
-
-**${comp} Konumlandırması:** ${bp.competitorPositioning}
-
-**${comp} Değer Önerisi:** ${bp.competitorValueProposition}
-
-**🎯 Fırsat Boşluğu:** ${bp.opportunityGap}
-
-**📊 Stratejik Çıkarım:** ${bp.strategicInference}
-
----
-
-## 2. TEKLİF, HUNİ VE TİCARİ KOŞUL MATRİSİ
-
-| Dönüşüm Kriteri | ${own} | ${comp} | Stratejik Analiz |
-| :--- | :--- | :--- | :--- |
-${fmRows}
-
----
-
-## 3. ÜRÜN & FİYATLANDIRMA STRATEJİSİ
-
-**Fiyat Algısı:** ${ps.pricePerception}
-
-**${own} Modeli:** ${ps.ownPricingModel}
-
-**${comp} Modeli:** ${ps.competitorPricingModel}
-
-**Rakip Kampanya Kurgusu:** ${ps.campaignStructure}
-
-**Paketleme Önerisi:** ${ps.bundlingRecommendation}
-
-**Stratejik Çıkarım:** ${ps.strategicInference}
-
----
-
-## 4. KREATİF VE REKLAM AÇISI İSTİHBARATI
-
-**Meta Reklam Kütüphanesi Linki:** [${comp} Reklamlarını Gör](${compT.adsLibraryUrl})
-
-**Rakibin Ana Reklam Açısı:** ${ci.competitorMainAngle}
-
-**Rakibin Hero Mesajı:** ${ci.competitorHeroMessage}
-
-**Rakibin Zayıf Karnı:** ${ci.competitorWeakSpot}
-
-**Vurucu Kanca Önerileri:**
-${hooks}
-
----
-
-## 5. AJANS İÇİN AKSİYON PLANI
-
-### ⚡ Hemen Yapılması Gereken (Quick Win - 24 Saat)
-**${ap.quickWin.title}**
-${ap.quickWin.action}
-*Beklenen Etki:* ${ap.quickWin.expectedImpact}
-*Zaman:* ${ap.quickWin.timeframe}
-
-### 🎯 Orta Vadeli Strateji
-**${ap.midTermStrategy.title}**
-${ap.midTermStrategy.description}
-
-${steps}
-
-*Rekabet Avantajı:* ${ap.midTermStrategy.competitiveEdge}
-
-### 🛠️ Teknik & Sitemap Aksiyonları (${ap.technicalAndSitemapActions.platformDetected})
-- **Sitemap Durumu:** ${ap.technicalAndSitemapActions.sitemapInsight}
-- **Piksel Açığı:** ${ap.technicalAndSitemapActions.pixelAndTrackingGap}
-- **Schema Markup:** ${ap.technicalAndSitemapActions.schemaAction}
-
----
-
-> **Ana Çıkarım:** ${ap.keyTakeaway}
-`;
+  return `# STRATEJİK REKABET VE HUNİ (FUNNEL) RAPORU\n\n**Bizim Markamız:** ${own}\n**Rakip Marka:** ${comp}\n\n---\n\n## 1. MARKA KONUMLANDIRMA VE DEĞER ÖNERİSİ\n\n**${own} Konumlandırması:** ${bp.ownPositioning}\n\n**${own} Değer Önerisi:** ${bp.ownValueProposition}\n\n**${comp} Konumlandırması:** ${bp.competitorPositioning}\n\n**${comp} Değer Önerisi:** ${bp.competitorValueProposition}\n\n**🎯 Fırsat Boşluğu:** ${bp.opportunityGap}\n\n**📊 Stratejik Çıkarım:** ${bp.strategicInference}\n\n---\n\n## 2. TEKLİF, HUNİ VE TİCARİ KOŞUL MATRİSİ\n\n| Dönüşüm Kriteri | ${own} | ${comp} | Stratejik Analiz |\n| :--- | :--- | :--- | :--- |\n${fmRows}\n\n---\n\n## 3. ÜRÜN & FİYATLANDIRMA STRATEJİSİ\n\n**Fiyat Algısı:** ${ps.pricePerception}\n\n**${own} Modeli:** ${ps.ownPricingModel}\n\n**${comp} Modeli:** ${ps.competitorPricingModel}\n\n**Rakip Kampanya Kurgusu:** ${ps.campaignStructure}\n\n**Paketleme Önerisi:** ${ps.bundlingRecommendation}\n\n**Stratejik Çıkarım:** ${ps.strategicInference}\n\n---\n\n## 4. KREATİF VE REKLAM AÇISI İSTİHBARATI\n\n**Rakibin Ana Reklam Açısı:** ${ci.competitorMainAngle}\n\n**Rakibin Hero Mesajı:** ${ci.competitorHeroMessage}\n\n**Rakibin Zayıf Karnı:** ${ci.competitorWeakSpot}\n\n**Vurucu Kanca Önerileri:**\n${hooks}\n\n---\n\n## 5. AJANS İÇİN AKSİYON PLANI\n\n### ⚡ Hemen Yapılması Gereken (Quick Win)\n**${ap.quickWin.title}**\n${ap.quickWin.action}\n*Beklenen Etki:* ${ap.quickWin.expectedImpact}\n*Zaman:* ${ap.quickWin.timeframe}\n\n### 🎯 Orta Vadeli Strateji\n**${ap.midTermStrategy.title}**\n${ap.midTermStrategy.description}\n\n${steps}\n\n*Rekabet Avantajı:* ${ap.midTermStrategy.competitiveEdge}\n\n---\n\n> **Ana Çıkarım:** ${ap.keyTakeaway}\n`;
 }

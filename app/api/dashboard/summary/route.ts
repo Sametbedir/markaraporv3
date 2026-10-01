@@ -25,14 +25,14 @@ export async function GET(req: NextRequest) {
       total_impressions: totalImpressions, total_clicks: totalClicks, total_conversions: totalConversions,
       avg_roas: totalSpend ? totalRevenue / totalSpend : 0,
       avg_ctr: totalImpressions ? (totalClicks / totalImpressions) * 100 : 0,
-      avg_cpc: 0,
+      avg_cpc: totalClicks ? totalSpend / totalClicks : 0,
+      avg_aov: totalOrders ? totalRevenue / totalOrders : 0,
+      avg_cac: totalOrders ? totalSpend / totalOrders : 0,
       total_profit: totalRevenue - totalSpend,
       profit_margin: totalRevenue ? ((totalRevenue - totalSpend) / totalRevenue) * 100 : 0,
       net_roas: totalSpend ? (totalRevenue - totalSpend) / totalSpend : 0,
-      total_commission: 0,
-      total_shipping: 0,
-      total_returns: 0,
-      total_cogs: 0,
+      total_commission: 0, total_shipping: 0, total_returns: 0, total_cogs: 0,
+      daily_revenue: totalRevenue / 30,
     });
   }
 
@@ -96,6 +96,8 @@ export async function GET(req: NextRequest) {
     avg_roas: Math.round(avgRoas * 100) / 100,
     avg_ctr: Math.round(avgCtr * 100) / 100,
     avg_cpc: Math.round(avgCpc * 100) / 100,
+    avg_aov: totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
+    avg_cac: totalOrders > 0 ? Math.round((totalSpend / totalOrders) * 100) / 100 : 0,
     total_profit: Math.round(totalProfit * 100) / 100,
     profit_margin: Math.round(profitMargin * 100) / 100,
     net_roas: Math.round(netRoas * 100) / 100,
@@ -103,5 +105,6 @@ export async function GET(req: NextRequest) {
     total_shipping: Math.round(shippingCost * 100) / 100,
     total_returns: Math.round(returnsCost * 100) / 100,
     total_cogs: Math.round(cogsCost * 100) / 100,
+    daily_revenue: Math.round((totalRevenue / 30) * 100) / 100,
   });
 }
