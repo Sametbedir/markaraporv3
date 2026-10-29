@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { storeOrderWhere } from '@/lib/store-orders';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   });
 
   const orders = await prisma.order.aggregate({
-    where: { userId, orderDate: { gte: start, lte: end } },
+    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
   });
 

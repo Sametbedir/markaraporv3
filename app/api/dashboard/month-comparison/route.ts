@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { storeOrderWhere } from '@/lib/store-orders';
 
 async function periodMetrics(userId: string, start: Date, end: Date) {
   const m = await prisma.dailyMetric.aggregate({
@@ -10,7 +11,7 @@ async function periodMetrics(userId: string, start: Date, end: Date) {
     _sum: { spend: true, revenue: true },
   });
   const o = await prisma.order.aggregate({
-    where: { userId, orderDate: { gte: start, lte: end } },
+    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
   });
   return {

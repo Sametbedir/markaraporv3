@@ -2,6 +2,8 @@
   total_spend: number;
   total_revenue: number;
   total_orders: number;
+  /** Gerçek mağaza siparişi var mı? Reklam platformu dönüşümleri sipariş sayılmaz. */
+  has_store_orders?: boolean;
   total_impressions: number;
   total_clicks: number;
   total_conversions: number;

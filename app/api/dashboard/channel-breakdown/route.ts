@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { storeOrderWhere } from '@/lib/store-orders';
 import { demoMetricsInRange } from '@/lib/demo-data';
 
 export async function GET(req: NextRequest) {
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   const channels = await prisma.order.groupBy({
     by: ['channel'],
-    where: { userId, orderDate: { gte: start, lte: end } },
+    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
     _sum: { totalPrice: true },
   });

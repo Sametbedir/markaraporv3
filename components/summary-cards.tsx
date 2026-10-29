@@ -15,7 +15,14 @@ export default function SummaryCards({ data, loading }: Props) {
     { label: 'Toplam Harcama', value: data?.total_spend ?? 0, prefix: '₺', icon: Wallet, color: 'text-red-500', bg: 'bg-red-500/10' },
     { label: 'Toplam Ciro', value: data?.total_revenue ?? 0, prefix: '₺', icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
     { label: 'Net Kâr', value: data?.total_profit ?? 0, prefix: '₺', icon: TrendingUp, color: (data?.total_profit ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500', bg: (data?.total_profit ?? 0) >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10' },
-    { label: 'Sipariş', value: data?.total_orders ?? 0, prefix: '', icon: ShoppingCart, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    {
+      label: 'Sipariş', value: data?.total_orders ?? 0, prefix: '', icon: ShoppingCart, color: 'text-blue-500', bg: 'bg-blue-500/10',
+      // Mağaza siparişi yoksa 0 yerine "—" gösterilir; platform dönüşümü ayrı belirtilir
+      missing: data ? data.has_store_orders === false : false,
+      note: data && data.has_store_orders === false
+        ? `Mağaza siparişi yüklenmedi · Platform dönüşümü: ${Math.round(data.total_conversions ?? 0).toLocaleString('tr-TR')}`
+        : undefined,
+    },
     { label: 'ROAS', value: data?.avg_roas ?? 0, prefix: '', suffix: 'x', icon: BarChart3, color: 'text-primary', bg: 'bg-primary/10' },
     { label: 'Net ROAS', value: data?.net_roas ?? 0, prefix: '', suffix: 'x', icon: TrendingUp, color: 'text-violet-500', bg: 'bg-violet-500/10' },
     { label: 'Gösterim', value: data?.total_impressions ?? 0, prefix: '', icon: Eye, color: 'text-amber-500', bg: 'bg-amber-500/10' },
@@ -46,10 +53,17 @@ export default function SummaryCards({ data, loading }: Props) {
             </div>
           </div>
           <div className={`text-xl md:text-2xl font-bold ${c.color}`}>
-            {c.prefix}
-            <AnimatedCounter value={c.value} decimals={c.suffix === 'x' || c.suffix === '%' ? 2 : (c.prefix === '₺' ? 0 : 0)} />
-            {c.suffix ?? ''}
+            {'missing' in c && c.missing ? (
+              <span className="text-muted-foreground" aria-label="Veri yok">—</span>
+            ) : (
+              <>
+                {c.prefix}
+                <AnimatedCounter value={c.value} decimals={c.suffix === 'x' || c.suffix === '%' ? 2 : (c.prefix === '₺' ? 0 : 0)} />
+                {c.suffix ?? ''}
+              </>
+            )}
           </div>
+          {'note' in c && c.note && <p className="mt-1 text-[11px] text-muted-foreground">{c.note}</p>}
         </div>
       ))}
     </div>
