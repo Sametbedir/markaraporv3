@@ -7,6 +7,7 @@ import {
   Database, HelpCircle, ArrowRight
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { saveActiveReport } from '@/lib/client-data-store';
 
 /* ─── Types ─── */
@@ -273,10 +274,16 @@ export default function UploadClient() {
     setDeletingId(id);
     try {
       const res = await fetch(`/api/upload/logs?id=${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setLogs((prev) => prev.filter((l) => l.id !== id));
+        toast.success(data?.message ?? 'Yükleme silindi.');
+      } else {
+        toast.error(data?.error ?? 'Silme başarısız oldu.');
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast.error('Sunucuya bağlanılamadı.');
+    }
     setDeletingId(null);
   };
 
