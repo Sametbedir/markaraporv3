@@ -15,7 +15,7 @@ npx prisma db seed
 
 5. `npm run dev` ile uygulamayi yeniden baslat ve admin ile giris yap.
 
-Admin: `admin@markarapor.com` / `Admin123`
+Admin hesabi `.env` icindeki `ADMIN_EMAIL` ve `ADMIN_PASSWORD` degerleriyle olusturulur (`npx tsx --require dotenv/config scripts/create-admin.ts`). Sifreyi dokumana yazma.
 
 Gecerli Supabase URL'si olmadan Prisma tablolarini olusturamaz; mevcut `.env` icindeki host DNS'te cozulmuyorsa Supabase Connect ekranindan yeni URL alinmalidir.
 

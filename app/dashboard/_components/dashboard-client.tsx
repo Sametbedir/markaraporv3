@@ -10,6 +10,7 @@ import ChannelPieChart from '@/components/channel-pie-chart';
 import CampaignTable from '@/components/campaign-table';
 import MonthComparison from '@/components/month-comparison';
 import HistoryChart from '@/components/history-chart';
+import AIAnalizKarti from '@/components/AIAnalizKarti';
 import type {
   DashboardSummary, TrendDataPoint, CampaignPerformance,
   ChannelBreakdown, MonthComparisonData, HistoryPoint
@@ -204,6 +205,21 @@ export default function DashboardClient() {
           </div>
 
           <CampaignTable data={campaigns} loading={loading} />
+
+          {/* Yapay Zeka Analiz Asistanı — yalnızca gerçek özet verisiyle çalışır */}
+          {!loading && summary && (
+            <AIAnalizKarti
+              dashboardVerileri={{
+                toplamHarcama: summary.total_spend,
+                toplamCiro: summary.total_revenue,
+                netKar: summary.total_profit,
+                siparis: summary.total_orders,
+                roas: summary.avg_roas,
+                netRoas: summary.net_roas,
+                karMarji: `${summary.profit_margin}%`,
+              }}
+            />
+          )}
         </>
       )}
     </div>

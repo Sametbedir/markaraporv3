@@ -11,11 +11,13 @@ export default function SimulationClient() {
   const [newBudget, setNewBudget] = useState(15000);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSimulate = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch('/api/simulation/what-if', {
+      const res = await fetch('/api/simulation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current_budget: currentBudget, new_budget: newBudget }),
@@ -23,8 +25,15 @@ export default function SimulationClient() {
       if (res.ok) {
         const data = await res.json();
         setResult(data);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setResult(null);
+        setError(data?.error ?? 'Simülasyon çalıştırılamadı.');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError('Sunucuya bağlanılamadı.');
+    }
     setLoading(false);
   };
 
@@ -77,6 +86,12 @@ export default function SimulationClient() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div role="alert" className="card-premium p-4 text-sm text-destructive border border-destructive/30">
+          {error}
+        </div>
+      )}
 
       {/* Results */}
       {result && (

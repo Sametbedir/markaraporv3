@@ -43,6 +43,11 @@ export async function POST(req: NextRequest) {
   const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
   const avgCpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
 
+  // Geçmiş veri yoksa projeksiyon üretmiyoruz; aksi halde 0 ROAS üzerinden yanıltıcı bir güven skoru çıkar.
+  if (dataPoints === 0) {
+    return NextResponse.json({ error: 'Seçilen dönemde geçmiş reklam verisi yok. Önce veri yükleyin.' }, { status: 400 });
+  }
+
   const budgetRatio = Number(new_budget) / Number(current_budget);
 
   // Diminishing returns factor
