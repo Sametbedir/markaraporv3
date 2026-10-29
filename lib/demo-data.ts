@@ -64,27 +64,3 @@ export function demoMetricsInRange(start?: string | null, end?: string | null) {
     return true;
   });
 }
-
-export function numberFrom(value: unknown) {
-  const normalized = String(value ?? '')
-    .replace(/\s/g, '')
-    .replace(/TRY|TL|₺/gi, '')
-    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
-    .replace(',', '.');
-  const number = Number(normalized.replace(/[^\d.-]/g, ''));
-  return Number.isFinite(number) ? number : 0;
-}
-
-export function normalizeHeader(value: string) {
-  return value
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ı/g, 'i')
-    .replace(/[^a-z0-9]/g, '');
-}
-
-export function findValue(row: Record<string, string>, names: string[]) {
-  const entry = Object.entries(row).find(([key]) => names.some((name) => key.includes(name)));
-  return entry?.[1] ?? '';
-}

@@ -98,7 +98,7 @@ model DailyMetric {
   // Boş (null) = dosyada bu veri yoktu. 0 ile karıştırılmaz.
   impressions Int?
   clicks      Int?
-  spend       Float   @default(0)
+  spend       Float?
   // Platformun bildirdiği satın alma sayısı (kesirli olabilir); mağaza siparişi değildir.
   conversions Float?
   // Platformun bildirdiği dönüşüm değeri; gerçek mağaza cirosu değildir.
