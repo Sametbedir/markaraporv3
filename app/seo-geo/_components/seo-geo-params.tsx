@@ -231,7 +231,7 @@ export default function SeoGeoParams({
       <div className="mt-5 pt-4 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Info className="w-3.5 h-3.5 text-primary" />
-          <span>Altyapı bazlı teknik kodlar ve Google Trends sinyalleri otomatik hesaplanır.</span>
+          <span>Altyapı bazlı teknik öneriler yapay zekâ ile hazırlanır; canlı arama verisi kullanılmaz.</span>
         </div>
 
         <button

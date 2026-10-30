@@ -39,6 +39,20 @@ export default function CompetitorClient({
     'Ajans seviyesi stratejik aksiyon planı hazırlanıyor...',
   ];
 
+  async function fetchHistory() {
+    try {
+      const res = await fetch('/api/competitor');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.reports && Array.isArray(json.reports) && json.reports.length > 0) {
+          setHistory(json.reports);
+        }
+      }
+    } catch (e) {
+      console.warn('Geçmiş rakip raporları alınamadı:', e);
+    }
+  }
+
   useEffect(() => {
     fetchHistory();
     const cached = typeof window !== 'undefined' ? localStorage.getItem('last_competitor_report') : null;
@@ -56,20 +70,6 @@ export default function CompetitorClient({
       }
     }
   }, []);
-
-  async function fetchHistory() {
-    try {
-      const res = await fetch('/api/competitor');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.reports && Array.isArray(json.reports) && json.reports.length > 0) {
-          setHistory(json.reports);
-        }
-      }
-    } catch (e) {
-      console.warn('Geçmiş rakip raporları alınamadı:', e);
-    }
-  }
 
   async function handleGenerate(params: CompetitorAnalysisRequest) {
     setLoading(true);

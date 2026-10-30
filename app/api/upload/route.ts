@@ -205,6 +205,7 @@ export async function POST(req: NextRequest) {
           fileType: ext.toUpperCase(),
           kind: 'ad_report',
           fileHash,
+          currency: report.currency,
           importedRows: report.rows.length,
           dateStart: report.dateStart,
           dateEnd: report.dateEnd,

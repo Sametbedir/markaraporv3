@@ -174,3 +174,35 @@ tarih;platform;kampanya;harcama
     expect(r.rows).toHaveLength(2);
   });
 });
+
+describe('platform tanıma', () => {
+  it('platform sütunu yoksa Meta ve Google dışa aktarımlarını başlıklardan tanır', () => {
+    const meta = parseAdReport(csv(`
+Reporting starts,Campaign name,Amount spent (TRY)
+2026-10-01,A,100
+`));
+    expect(meta.rows[0].platform).toBe('Meta Ads');
+    expect(codes(meta)).toContain('platform_inferred');
+    const google = parseAdReport(csv(`
+Day,Campaign,Cost,Conv. value
+2026-10-01,A,100,300
+`));
+    expect(google.rows[0].platform).toBe('Google Ads');
+  });
+
+  it('genel başlıklarda platform tahmin etmez', () => {
+    const r = parseAdReport(csv(`
+tarih;kampanya;harcama
+2026-10-01;A;100
+`));
+    expect(r.rows[0].platform).toBeNull();
+  });
+
+  it('platform sütunu varsa onu kullanır', () => {
+    const r = parseAdReport(csv(`
+Day,Platform,Campaign,Cost,Conv. value
+2026-10-01,TikTok,A,100,300
+`));
+    expect(r.rows[0].platform).toBe('TikTok');
+  });
+});

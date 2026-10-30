@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, Upload, Activity, Settings, LogOut,
-  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords,
+  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText,
 } from 'lucide-react';
 
 interface SidebarLayoutProps {
@@ -20,6 +20,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/report', label: 'Müşteri Raporu', icon: FileText },
     { href: '/seo-geo', label: 'SEO & GEO Raporu', icon: Compass },
     { href: '/competitor', label: 'Rakip Analizi', icon: Swords },
     { href: '/goals', label: 'Hedeflerim', icon: Target },
@@ -34,7 +35,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
+      <div className="print-hidden lg:hidden fixed top-0 left-0 right-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-primary">
             <BarChart3 className="w-5 h-5 text-primary-foreground" />

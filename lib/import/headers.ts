@@ -135,3 +135,21 @@ export function mapHeaders(headerRow: unknown[]): HeaderMapping {
     headerCurrencies: [...headerCurrencies],
   };
 }
+
+/**
+ * Platform sütunu olmayan dışa aktarımlarda platformu başlıklardan tanır.
+ * Yalnızca o platforma özgü başlıklar kullanılır; emin olunamazsa null döner.
+ */
+const PLATFORM_SIGNATURES: { platform: string; keys: string[] }[] = [
+  {
+    platform: 'Meta Ads',
+    keys: ['amountspent', 'harcanantutar', 'reportingstarts', 'raporlamabaslangici', 'purchasesconversionvalue', 'satinalmalardonusumdegeri', 'linkclicks', 'baglantitiklamalari'],
+  },
+  { platform: 'Google Ads', keys: ['convvalue', 'impr', 'currencycode', 'allconvvalue', 'costconv'] },
+];
+
+export function detectPlatformFromHeaders(headerRow: unknown[]): string | null {
+  const keys = new Set(headerRow.map((h) => normalizeHeader(String(h ?? '')).key));
+  const matches = PLATFORM_SIGNATURES.filter((sig) => sig.keys.some((k) => keys.has(k)));
+  return matches.length === 1 ? matches[0].platform : null;
+}

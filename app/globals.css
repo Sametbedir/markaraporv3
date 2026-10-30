@@ -151,4 +151,11 @@
   main > div { max-width: none !important; padding: 0 !important; }
   .card-premium { box-shadow: none !important; break-inside: avoid; border-color: #d1d5db !important; }
   .recharts-wrapper { break-inside: avoid; }
+  /* Müşteri raporu: not alanı metin olarak basılır, tablolar sayfa ortasında bölünmez */
+  .report-notes { display: block !important; }
+  .report-sheet section { break-inside: avoid; }
+  .report-sheet .overflow-x-auto { overflow: visible !important; }
 }
+
+/* PNG dışa aktarımı sırasında not metnini göster (textarea görüntüye girmez) */
+.is-exporting .report-notes { display: block !important; }

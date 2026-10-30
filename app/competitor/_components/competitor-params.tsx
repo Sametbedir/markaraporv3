@@ -111,13 +111,12 @@ export default function CompetitorParams({
           </div>
           <div className="space-y-1 text-sm">
             <h4 className="font-semibold text-foreground flex items-center gap-2">
-              Sıfır Halüsinasyon ve Doğrulanabilir Rekabet İstihbaratı Standardı
+              Bu rapor nasıl hazırlanır?
             </h4>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              Bu modülde tahmini ciro, uydurma indirim veya asılsız reklam sayısı üretilmez. Canlı kaynaklardan
-              veya sağladığınız verilerden doğrulanamayan her metrik otomatik olarak{' '}
-              <span className="font-mono text-amber-500 font-medium">[Doğrulanamadı - Manuel Kontrol]</span> şeklinde
-              etiketlenir.
+              Bu modül web sitelerine, Instagram'a veya reklam kütüphanesine bağlanmaz. Rapor, girdiğiniz bilgiler ve
+              “Ek veri” alanına yapıştırdığınız içerikle yapay zekâ tarafından hazırlanır. Rakibe özgü ifadeleri
+              müşteriye sunmadan önce kendiniz doğrulayın.
             </p>
           </div>
         </div>
@@ -286,7 +285,7 @@ export default function CompetitorParams({
 
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
-                <span>Canlı Arama / Kütüphane Verileri (Opsiyonel)</span>
+                <span>Ek Veri: Reklam Kütüphanesinden Kopyaladıklarınız (Opsiyonel)</span>
                 <span className="text-[11px] text-muted-foreground">
                   Meta Ads Kütüphanesi / Fiyat Notları
                 </span>

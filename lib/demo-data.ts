@@ -18,6 +18,7 @@ export type DemoUploadLog = {
   fileType: string;
   kind: string;
   fileHash: string | null;
+  currency?: string | null;
   importedRows: number;
   dateStart: string | null;
   dateEnd: string | null;

@@ -46,7 +46,7 @@ export default function SeoGeoReportView({ report }: SeoGeoReportViewProps) {
                 {trendSignal.statusBadge}
               </span>
               <span className="text-xs text-indigo-300/80">
-                Google Trends & Canlı Arama Dalgalanması
+                Talep Sinyali (yapay zekâ tahmini)
               </span>
             </div>
 

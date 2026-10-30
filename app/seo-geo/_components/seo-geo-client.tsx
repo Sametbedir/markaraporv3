@@ -35,7 +35,7 @@ export default function SeoGeoClient({
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   const loadingSteps = [
-    'Google Trends canlı arama dalgalanmaları okunuyor...',
+    'Sektör ve bölge bilgileri yapay zekâya iletiliyor...',
     'Bölgesel GEO fırsatları ve yerel talep haritası çıkarılıyor...',
     `${platform.toUpperCase()} paneline özel teknik yönlendirme adımları hazırlanıyor...`,
     'Gelecek tarih erken uyarı ve negatif trend radarı taranıyor...',
@@ -153,11 +153,11 @@ export default function SeoGeoClient({
               <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
                 SEO & GEO Marka Raporu
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  Canlı Takip & Erken Uyarı
+                  Yapay Zekâ Önerileri
                 </span>
               </h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Google Trends anlık verileri, bölgesel GEO fırsatları ve e-ticaret altyapınıza özel adım adım panel rehberi.
+                Yapay zekâ destekli SEO & GEO önerileri ve e-ticaret altyapınıza özel adım adım panel rehberi. Canlı arama verisi çekilmez.
               </p>
             </div>
           </div>

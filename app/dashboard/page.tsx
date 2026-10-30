@@ -30,7 +30,7 @@ export default async function DashboardPage() {
                 </h4>
               </div>
               <p className="text-xs text-muted-foreground">
-                Google Trends anlık verileri, İkas/Shopify/Ticimax/IdeaSoft altyapı panel rehberi ve bölgesel fırsat haritası.
+                Yapay zekâ destekli SEO & GEO önerileri ve İkas/Shopify/Ticimax/IdeaSoft altyapı panel rehberi.
               </p>
             </div>
             <a

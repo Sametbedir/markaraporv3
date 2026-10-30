@@ -14,6 +14,7 @@ import {
   HeaderMapping,
   METRIC_FIELDS,
   MetricField,
+  detectPlatformFromHeaders,
   mapHeaders,
   normalizeCurrency,
 } from './headers';
@@ -120,6 +121,12 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
   const { columns, headers, unmapped, headerCurrencies } = header.mapping;
   const dataRows = table.slice(header.index + 1);
 
+  // Platform sütunu yoksa Meta/Google dışa aktarımlarını başlıklarından tanı
+  const inferredPlatform = columns.platform === undefined ? detectPlatformFromHeaders(table[header.index] ?? []) : null;
+  if (inferredPlatform) {
+    issues.add('platform_inferred', `Dosyada platform sütunu yok; başlıklardan "${inferredPlatform}" olarak tanındı.`);
+  }
+
   // Ondalık stilini metrik sütunlarındaki örneklerden belirle (bulunamazsa Türkçe biçim)
   const samples: unknown[] = [];
   for (const row of dataRows.slice(0, 500)) {
@@ -204,7 +211,7 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
       return;
     }
 
-    const platform = columns.platform !== undefined ? String(row[columns.platform] ?? '').trim() || null : null;
+    const platform = columns.platform !== undefined ? String(row[columns.platform] ?? '').trim() || null : inferredPlatform;
     const campaign = columns.campaign !== undefined ? String(row[columns.campaign] ?? '').trim() || null : null;
     const key = [date, dateEnd ?? '', platform ?? '', campaign ?? ''].join('|');
 
