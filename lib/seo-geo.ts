@@ -132,7 +132,10 @@ const CANDIDATE_MODELS = [
   'gemini-3.1-flash-lite',
 ];
 
-export async function generateSeoGeoReport(input: SeoGeoRequest): Promise<SeoGeoReportResult> {
+/**
+ * AI (Gemini) ile SEO/GEO raporu üretir. AI kullanılamazsa null döner; hazır şablonla uydurma rapor üretilmez.
+ */
+export async function generateSeoGeoReport(input: SeoGeoRequest): Promise<SeoGeoReportResult | null> {
   const platform = input.platform?.toLowerCase() || 'ikas';
   const niche = input.niche?.trim() || 'Genel E-Ticaret';
   const location = input.location?.trim() || 'Türkiye Geneli';
@@ -153,6 +156,12 @@ KULLANICI PARAMETRELERİ:
 - Web Sitesi: ${websiteUrl || 'Belirtilmedi'}
 ${input.targetKeywords ? `- Kullanıcı Odak Kelimeleri: ${input.targetKeywords}` : ''}
 ${input.notes ? `- Ekstra Notlar: ${input.notes}` : ''}
+
+VERİ DÜRÜSTLÜĞÜ KURALLARI (EN ÖNEMLİ):
+- Canlı Google Trends, arama hacmi, rakip trafiği veya ciro verisine ERİŞİMİN YOK.
+- Yüzde artış, arama hacmi, ciro etkisi, pazar payı, sağlık skoru gibi sayısal değerler UYDURMA; bu alanlara "Ölçülmedi" yaz.
+- "Google Trends verilerine göre", "son 30 günde" gibi ölçülmüş veri iddiasında bulunma.
+- Önerileri genel en iyi uygulama ve uzman görüşü olarak sun; aşağıdaki JSON şablonundaki örnek sayıları kopyalama.
 
 PLATFORM KURALLARI:
 - Shopify ise: App Store entegrasyonları, Liquid şablon optimizasyonları, blog altyapısı, uluslararası (multi-language/currency) SEO odaklı panel yönergeleri ver.
@@ -243,7 +252,7 @@ Sadece saf JSON çıktısı döndür, markdown ekleme.
     }
   }
 
-  return generateDeterministicExpertReport(input);
+  return null;
 }
 
 function extractJson(text: string): any {
@@ -275,17 +284,17 @@ function formatAiReport(data: any, input: SeoGeoRequest, source: 'gemini-ai' | '
     location: input.location,
     websiteUrl: input.websiteUrl,
     trendSignal: {
-      singleSentenceSummary: data.singleSentenceSummary || `Google Trends verilerine göre ${input.niche} sektöründe ${input.location} odaklı yerel aramalarda son 30 günde yüksek talep sinyali gözlemleniyor.`,
-      trendsDelta: data.trendsDelta || '+%34',
+      singleSentenceSummary: data.singleSentenceSummary || 'Trend verisi ölçülmedi.',
+      trendsDelta: data.trendsDelta || 'Ölçülmedi',
       topRisingSearch: data.topRisingSearch || `${input.location} ${input.niche} fiyatları ve modelleri`,
       seasonalImpact: data.seasonalImpact || 'Sezon geçişi ve yerel aramalarda yüksek ivme',
-      statusBadge: data.statusBadge || 'Yüksek Fırsat',
+      statusBadge: data.statusBadge || 'Tahmini',
     },
     opportunityArea: {
-      summary: data.opportunitySummary || `${input.location} bölgesinde yerel arama hacimleri hızla yükselirken markanız long-tail ve coğrafi aramalarda ilk sayfada yer almıyor; acil indeksleme fırsatı mevcut.`,
-      missedKeywords: Array.isArray(data.missedKeywords) && data.missedKeywords.length > 0 ? data.missedKeywords : getKeywordsForNiche(input.niche, input.location),
-      geoOpportunities: Array.isArray(data.geoOpportunities) && data.geoOpportunities.length > 0 ? data.geoOpportunities : getGeoOpportunities(input.location, input.niche),
-      regionalShippingAdvantage: data.regionalShippingAdvantage || `${input.location} ve çevre illere aynı gün kargo & hızlı teslimat vaadi ile bölgesel dönüşüm oranınızı rakiplerin 2 katına çıkarabilirsiniz.`,
+      summary: data.opportunitySummary || '',
+      missedKeywords: Array.isArray(data.missedKeywords) && data.missedKeywords.length > 0 ? data.missedKeywords : [],
+      geoOpportunities: Array.isArray(data.geoOpportunities) && data.geoOpportunities.length > 0 ? data.geoOpportunities : [],
+      regionalShippingAdvantage: data.regionalShippingAdvantage || '',
     },
     platformGuide: {
       selectedPlatform: platformName,
@@ -302,41 +311,38 @@ function formatAiReport(data: any, input: SeoGeoRequest, source: 'gemini-ai' | '
         : getPlatformSteps(platform, input.niche, input.location),
     },
     expectedImpact: {
-      summary: data.expectedImpactSummary || 'Yapılan teknik SEO ve GEO yerel yapılandırmaları sonrasında organik aramalardan gelen sipariş ve tıklama hacminde sıçrama öngörülmektedir.',
-      estimatedTrafficGrowth: data.estimatedTrafficGrowth || '+45% - +75%',
-      estimatedConversionIncrease: data.estimatedConversionIncrease || '+1.6x - +2.2x',
-      breakEvenTimeframe: data.breakEvenTimeframe || '3 - 5 Hafta',
-      projectedRevenueImpact: data.projectedRevenueImpact || '+120.000 ₺ - +280.000 ₺ / Ay Ek Ciro Potansiyeli',
+      summary: data.expectedImpactSummary || 'Etki tahmini yapılmadı.',
+      estimatedTrafficGrowth: data.estimatedTrafficGrowth || 'Ölçülmedi',
+      estimatedConversionIncrease: data.estimatedConversionIncrease || 'Ölçülmedi',
+      breakEvenTimeframe: data.breakEvenTimeframe || 'Ölçülmedi',
+      projectedRevenueImpact: data.projectedRevenueImpact || 'Ölçülmedi',
       kpiTargets: [
-        { label: 'Organik Tıklama Artışı', value: data.estimatedTrafficGrowth || '+55%' },
-        { label: 'Yerel GEO Arama Sıralaması', value: 'İlk 3 Pozisyon' },
-        { label: 'Tahmini Sepet Dönüşümü', value: data.estimatedConversionIncrease || '+1.9x' },
-        { label: 'Google Dizin Sağlığı', value: '98/100' },
+        { label: 'Organik Tıklama Artışı', value: data.estimatedTrafficGrowth || 'Ölçülmedi' },
+        { label: 'Yerel GEO Arama Sıralaması', value: 'Ölçülmedi' },
+        { label: 'Tahmini Sepet Dönüşümü', value: data.estimatedConversionIncrease || 'Ölçülmedi' },
+        { label: 'Google Dizin Sağlığı', value: 'Ölçülmedi' },
       ],
     },
-    healthScore: typeof data.healthScore === 'number' ? data.healthScore : 68,
+    // Sağlık skoru gerçek bir site taramasıyla ölçülmez; AI'ın verdiği değer de tahmindir
+    healthScore: typeof data.healthScore === 'number' ? data.healthScore : 0,
     trackingRadar: {
       overallStatus: data.alarms && data.alarms.length > 0 ? 'risk_detected' : 'needs_attention',
-      statusMessage: 'İleriki tarihlerde negatif ayrışma yaşamamak için 3 kritik alarm ve düşüş göstergesi tespit edildi.',
+      statusMessage: 'Aşağıdaki riskler yapay zekâ tarafından öngörülen olası durumlardır; ölçülmüş düşüş değildir.',
       alarms: Array.isArray(data.alarms) && data.alarms.length > 0
         ? data.alarms.map((a: any, i: number) => ({
             id: 'alarm-' + (i + 1),
             type: a.riskSeverity === 'Kritik' ? 'critical' : 'warning',
             category: a.category || 'Sıralama Kaybı',
             metric: a.metric || 'Arama Görünürlüğü',
-            change: a.change || '-%18',
+            change: a.change || 'Ölçülmedi',
             description: a.description || 'Yerel sıralamada gerileme riski.',
             immediateAction: a.immediateAction || 'Kategori meta etiketlerini yerel lokasyon ekleriyle güncelleyin.',
             riskSeverity: a.riskSeverity || 'Yüksek',
           }))
-        : getDefaultAlarms(input.niche, input.location),
+        : [],
       futureRiskIndicators: Array.isArray(data.futureRiskIndicators) && data.futureRiskIndicators.length > 0
         ? data.futureRiskIndicators
-        : [
-            'Rakip markaların yerel Google Merchant Center feed optimizasyonu yapması durumunda tıklama payınız %20 düşebilir.',
-            'Kategori sayfalarındaki sayfalama (pagination) URL parametreleri Google tarafından kopya içerik algılanırsa dizin kaybı riski.',
-            'Mevsimsel talep zirvesine girmeden önce 301 yönlendirmelerinin ve 404 sayfalarının temizlenmemesi ciro kaybı yaratır.',
-          ],
+        : [],
       monitoringInterval: 'Her 7 Günde Bir Otomatik Tarama ve Alarm Kontrolü',
     },
     intentAndTaxonomy: buildIntentAndTaxonomyStrategy(input.niche, input.location),
@@ -345,76 +351,6 @@ function formatAiReport(data: any, input: SeoGeoRequest, source: 'gemini-ai' | '
     croTrustSignals: buildCroTrustSignals(input.location, input.niche),
     expectedTechnicalImpact: buildExpectedTechnicalImpact(),
     source,
-  };
-}
-
-function generateDeterministicExpertReport(input: SeoGeoRequest): SeoGeoReportResult {
-  const platform = input.platform?.toLowerCase() || 'ikas';
-  const niche = input.niche?.trim() || 'Moda & E-Ticaret';
-  const location = input.location?.trim() || 'Bursa';
-  const platformName = getPlatformDisplayName(platform);
-
-  const keywords = getKeywordsForNiche(niche, location);
-  const geoOpps = getGeoOpportunities(location, niche);
-  const steps = getPlatformSteps(platform, niche, location);
-  const alarms = getDefaultAlarms(niche, location);
-
-  return {
-    id: 'seo-geo-' + Date.now(),
-    createdAt: new Date().toISOString(),
-    platform,
-    niche,
-    location,
-    websiteUrl: input.websiteUrl,
-    trendSignal: {
-      singleSentenceSummary: `Google Trends ve yerel arama verilerine göre '${location} ${niche}' aramaları son 30 günde %42 sıçrama göstermiş olup, yerel stok ve hızlı sevkiyat sinyalleri veren siteler organik trafikte rakiplerinden %65 daha fazla dönüşüm elde etmektedir.`,
-      trendsDelta: '+%42 Artış',
-      topRisingSearch: `${location} en iyi ${niche} mağazaları ve online sipariş`,
-      seasonalImpact: 'Son çeyrek yüksek tüketim dönemi ve yerel satın alma eğilimi zirve noktasında',
-      statusBadge: 'Yüksek Fırsat',
-    },
-    opportunityArea: {
-      summary: `${location} merkezli ve çevre illerdeki tüketiciler "${niche}" aramalarında doğrudan hızlı teslimat ve güvenilir yerel mağaza arayışında. Sitenizde şehir bazlı meta yapıları ve yerel schema markup eksikliği nedeniyle her ay binlerce nitelikli organik ziyaretçi kaçırılıyor.`,
-      missedKeywords: keywords,
-      geoOpportunities: geoOpps,
-      regionalShippingAdvantage: `${location} ve çevre illerdeki siparişlerde "Aynı Gün Kargoda / Ertesi Gün Teslim" ibaresini meta title ve ürün şablonlarına ekleyerek sepet terk etme oranını %28 aşağı çekebilirsiniz.`,
-    },
-    platformGuide: {
-      selectedPlatform: platformName,
-      panelNavigation: getPlatformPanelNavigation(platform),
-      steps,
-    },
-    expectedImpact: {
-      summary: 'Belirtilen platform içi teknik SEO düzenlemeleri ve GEO yerel açılış sayfaları tamamlandığında 30-45 gün içinde organik trafikte net sıçrama ve yerel dönüşümlerde katlanma sağlanır.',
-      estimatedTrafficGrowth: '+48% - +82% Organik Ziyaretçi Artışı',
-      estimatedConversionIncrease: '+1.75x Dönüşüm Oranı Artışı',
-      breakEvenTimeframe: '3 - 4 Hafta',
-      projectedRevenueImpact: 'Aylık ortalama 145.000 ₺ - 310.000 ₺ Ekstra Organik Ciro',
-      kpiTargets: [
-        { label: 'Hedef Anahtar Kelimeler', value: 'İlk 3 Sırada 12 Yeni Kelime' },
-        { label: 'Bölgesel Trafik Payı', value: `${location} & Çevre: +%90` },
-        { label: 'Sayfa Yükleme & TTFB', value: '< 0.8 saniye (Core Web Vitals)' },
-        { label: 'Organik Gelir Katkısı', value: '+%35 Ciro Payı' },
-      ],
-    },
-    healthScore: 64,
-    trackingRadar: {
-      overallStatus: 'risk_detected',
-      statusMessage: '🚨 İleriki Tarih Takip Radarı: 3 kritik düşüş riski tespit edildi. Erken müdahale edilmezse organik sıralama kaybı kaçınılmaz.',
-      alarms,
-      futureRiskIndicators: [
-        `Google Haritalar ve yerel arama sonuçlarında ${location} etiketli rakip sitelerin backlink ve kategori derinliği son 14 günde %18 arttı.`,
-        'Filtreleme sayfalarının (renk, beden, fiyat) noindex/canonical ayarı yapılmadığı için Googlebot arama bütçesini israf ediyor.',
-        'Mobil sayfaların LCP skoru 2.5 saniyenin üzerinde; acil WebP görsel ve script erteleme gerekiyor.',
-      ],
-      monitoringInterval: 'Her 7 Günde Bir Düzenli Tarama & Otomatik Uyarı',
-    },
-    intentAndTaxonomy: buildIntentAndTaxonomyStrategy(input.niche, input.location),
-    platformTechnicalActions: buildPlatformTechnicalActions(platform, input.niche, input.location),
-    schemaMarkup: buildSchemaGeoMarkup(input.websiteUrl || 'https://siteniz.com', input.niche, input.location),
-    croTrustSignals: buildCroTrustSignals(input.location, input.niche),
-    expectedTechnicalImpact: buildExpectedTechnicalImpact(),
-    source: 'expert-engine',
   };
 }
 
@@ -436,82 +372,6 @@ function getPlatformPanelNavigation(platform: string): string {
     case 'ideasoft': return 'IdeaSoft Panel > Katalog > Kategori & Ürün Yönetimi > Detay > SEO Bilgileri';
     default: return 'Yönetim Paneli > SEO & İçerik Ayarları';
   }
-}
-
-function getKeywordsForNiche(niche: string, location: string): KeywordOpportunity[] {
-  return [
-    {
-      keyword: `${location} ${niche} modelleri`,
-      monthlyVolume: '8.400',
-      searchTrend: '+%46',
-      difficulty: 'Düşük',
-      regionPriority: location,
-      intent: 'Ticari',
-      opportunityScore: 94,
-    },
-    {
-      keyword: `en ucuz ${niche} fiyatları online`,
-      monthlyVolume: '19.800',
-      searchTrend: '+%28',
-      difficulty: 'Orta',
-      regionPriority: 'Türkiye Geneli',
-      intent: 'Yerel Satın Alma',
-      opportunityScore: 89,
-    },
-    {
-      keyword: `${location} aynı gün kargo ${niche}`,
-      monthlyVolume: '4.200',
-      searchTrend: '+%62',
-      difficulty: 'Düşük',
-      regionPriority: location,
-      intent: 'Yerel Satın Alma',
-      opportunityScore: 96,
-    },
-    {
-      keyword: `kaliteli ${niche} üreticileri & toptan perakende`,
-      monthlyVolume: '6.100',
-      searchTrend: '+%19',
-      difficulty: 'Düşük',
-      regionPriority: `${location} & Marmara`,
-      intent: 'Ticari',
-      opportunityScore: 85,
-    },
-    {
-      keyword: `orijinal ${niche} sipariş ver`,
-      monthlyVolume: '12.500',
-      searchTrend: '+%35',
-      difficulty: 'Orta',
-      regionPriority: 'Türkiye Geneli',
-      intent: 'Ticari',
-      opportunityScore: 82,
-    },
-  ];
-}
-
-function getGeoOpportunities(location: string, niche: string): GeoRegionOpportunity[] {
-  return [
-    {
-      cityOrRegion: location,
-      growthRate: '+%54 Arama Patlaması',
-      localAdvantage: `${location} merkezli kargo deposu sayesinde 24 saatte adrese teslim avantajı ve yerel tüketici güveni.`,
-      recommendedAction: `Kategori başlıklarına "${location} İçi Hızlı Teslimat" ibaresini entegre edin ve Google İşletme Profilinizi bağlayın.`,
-      marketShareEstimate: '%22 Pazar Payı Kapma Fırsatı',
-    },
-    {
-      cityOrRegion: 'Komşu İller & Metropoller (İstanbul, İzmir, Bursa, Ankara)',
-      growthRate: '+%38 Düzenli Büyüme',
-      localAdvantage: 'Bölgesel lojistik transfer merkezlerine yakınlık ile 1 iş gününde teslimat gücü.',
-      recommendedAction: 'Ürün sayfalarına "Marmara ve Ege bölgesine ertesi gün kapınızda" bildirim çubuğu ekleyin.',
-      marketShareEstimate: '%14 Ek Trafik',
-    },
-    {
-      cityOrRegion: 'İç Anadolu & Akdeniz Bölgesi',
-      growthRate: '+%29 Fiyat Odaklı Arama',
-      localAdvantage: 'Yerel üretici/satıcı fiyat avantajı ve aracı komisyonu olmadan direkt satış.',
-      recommendedAction: `"${niche} Kampanyaları & İndirimli Fiyatlar" anahtar kelimesiyle zenginleştirilmiş açılış sayfası oluşturun.`,
-      marketShareEstimate: '%11 Dönüşüm Artışı',
-    },
-  ];
 }
 
 function getPlatformSteps(platform: string, niche: string, location: string): StepByStepGuide['steps'] {
@@ -659,37 +519,3 @@ function getPlatformSteps(platform: string, niche: string, location: string): St
   }
 }
 
-function getDefaultAlarms(niche: string, location: string): EarlyWarningAlarm[] {
-  return [
-    {
-      id: 'alarm-1',
-      type: 'critical',
-      category: 'Sıralama Kaybı',
-      metric: `${location} ${niche} Sıralaması`,
-      change: '4 Pozisyon Gerileme (3. sıradan 7. sıraya)',
-      description: 'Rakipler kategori başlıklarına ve içeriklerine yerel lokasyon sinyalleri eklediği için organik pozisyon kaybı başladı.',
-      immediateAction: `Kategori meta title'ını "${niche} | ${location} Hızlı Kargo & En İyi Fiyat" olarak derhal güncelleyin.`,
-      riskSeverity: 'Kritik',
-    },
-    {
-      id: 'alarm-2',
-      type: 'warning',
-      category: 'Teknik SEO',
-      metric: 'Dizinlenmemiş Kategori & Filtre URL\'leri',
-      change: '14 Sayfa "Taranmadı / Hariç Bırakıldı"',
-      description: 'Faceted filtreleme parametreleri canonical belirtilmediği için Googlebot arama bütçesi israf ediliyor.',
-      immediateAction: 'Panelden filtreli sayfaların canonical etiketini ana kategori URL\'sine yönlendirin.',
-      riskSeverity: 'Yüksek',
-    },
-    {
-      id: 'alarm-3',
-      type: 'warning',
-      category: 'Bölgesel GEO Kaybı',
-      metric: `${location} Yerel Tıklama Oranı (CTR)`,
-      change: '-%16 Tıklama Oranı Düşüşü',
-      description: 'Arama sonuç snippet\'ında kargo süresi veya yerel güvence bilgisi bulunmadığı için kullanıcılar rakip sitelere tıklıyor.',
-      immediateAction: 'Meta description alanının ilk 40 karakterine "Aynı Gün Teslimat" ibaresi yerleştirin.',
-      riskSeverity: 'Orta',
-    },
-  ];
-}

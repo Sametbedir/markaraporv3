@@ -1,5 +1,6 @@
 'use client';
 
+import AiEstimateNotice from '@/components/ai-estimate-notice';
 import React, { useState } from 'react';
 import {
   Swords,
@@ -91,6 +92,7 @@ export default function CompetitorReportView({
 
   return (
     <div className="space-y-8 animate-in fade-in-50 duration-300">
+      <AiEstimateNotice source={(report as { source?: string }).source} />
       {/* ═══ TOP HEADER ═══ */}
       <div className="rounded-3xl border border-border bg-card/90 backdrop-blur-xl p-6 lg:p-8 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-border">

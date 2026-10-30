@@ -106,9 +106,13 @@ const CANDIDATE_MODELS = [
   'gemini-3.5-flash',
 ];
 
+/**
+ * AI (Gemini) ile rakip raporu üretir. AI kullanılamazsa null döner; hazır şablonla
+ * rakip hakkında uydurma gözlemler içeren rapor üretilmez.
+ */
 export async function generateCompetitorReport(
   input: CompetitorAnalysisRequest
-): Promise<CompetitorReportResult> {
+): Promise<CompetitorReportResult | null> {
   const ownBrandName = input.ownBrandName?.trim() || 'Markanız';
   const competitorBrandName = input.competitorBrandName?.trim() || 'Rakip Marka';
   const ownUrl = input.ownBrandUrl?.trim() || 'Belirtilmedi';
@@ -148,7 +152,7 @@ export async function generateCompetitorReport(
     }
   }
 
-  return generateDeterministicReport(input);
+  return null;
 }
 
 function buildSystemPrompt(
@@ -158,15 +162,16 @@ function buildSystemPrompt(
   return `
 Sen üst düzey bir E-Ticaret Performans Pazarlama Direktörü ve Rekabet İstihbarat Uzmanısın.
 KRİTİK KURALLAR:
-1. "Manuel Kontrol" veya "Doğrulanamadı" ASLA yazma. Veri eksikse stratejik çıkarım yap.
-2. Ciro, satış adedi, ROAS gibi dışarıdan bilinemeyecek metrikleri UYDURMA.
+1. Web sitelerine, Instagram'a veya reklam kütüphanesine ERİŞİMİN YOK. Yalnızca aşağıdaki girdiler ve "Ek Veri" ile çalış.
+2. Rakip hakkında gözlem iddiasında bulunma ("rakibin sitesinde X var" gibi). Ek veride olmayan bir bilgiyi "Doğrulanmadı" olarak işaretle; önerilerini genel en iyi uygulama olarak sun.
+3. Ciro, satış adedi, ROAS, indirim oranı gibi bilinemeyecek metrikleri UYDURMA.
 3. "Pahalı/ucuz" gibi sığ ifadeler yerine profesyonel pazarlama terminolojisi kullan (Penetrasyon stratejisi, Premium konumlandırma vb.).
 
 GİRDİLER:
 - Bizim Marka: ${ownBrand} | URL: ${ownUrl} | IG: ${ownIg || 'Belirtilmedi'}
 - Rakip: ${compBrand} | URL: ${compUrl} | IG: ${compIg || 'Belirtilmedi'}
 - Sektör: ${niche}
-${rawData ? `- Ek Veri:\n${rawData}` : '- Ek veri sağlanmadı; sitelerden çıkarım yap.'}
+${rawData ? `- Ek Veri:\n${rawData}` : '- Ek veri sağlanmadı; rakibe özgü gözlem yapma, yalnızca genel strateji öner.'}
 
 Aşağıdaki JSON formatında yanıt ver (saf JSON, ek metin yok):
 {
@@ -312,10 +317,6 @@ function assembleReport(
     source,
   };
   return report;
-}
-
-function generateDeterministicReport(input: CompetitorAnalysisRequest): CompetitorReportResult {
-  return assembleReport({}, input, 'expert-engine');
 }
 
 // ═══════════════════════════════════════════════════════════════

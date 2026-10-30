@@ -1,5 +1,6 @@
 'use client';
 
+import AiEstimateNotice from '@/components/ai-estimate-notice';
 import React, { useState } from 'react';
 import {
   TrendingUp, MapPin, Zap, Search, Layers, Store, Copy, Check,
@@ -32,6 +33,7 @@ export default function SeoGeoReportView({ report }: SeoGeoReportViewProps) {
 
   return (
     <div className="space-y-8">
+      <AiEstimateNotice source={(report as { source?: string }).source} />
       {/* 0. ANLIK DURUM VE TREND SİNYALİ BANNER */}
       <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white shadow-xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-primary/10 rounded-full blur-3xl pointer-events-none" />

@@ -6,6 +6,12 @@ import { prisma } from '@/lib/prisma';
 import { generateCompetitorReport, CompetitorAnalysisRequest } from '@/lib/competitor-analysis';
 
 export async function POST(req: NextRequest) {
+  // AI kotası harcayan bir uç nokta; yalnızca giriş yapmış kullanıcılar kullanabilir
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 401 });
+  }
+
   try {
     const body = (await req.json()) as CompetitorAnalysisRequest;
 
@@ -17,11 +23,16 @@ export async function POST(req: NextRequest) {
     }
 
     const report = await generateCompetitorReport(body);
+    if (!report) {
+      return NextResponse.json(
+        { error: 'Rakip analizi raporu yapay zekâ servisi gerektirir. GEMINI_API_KEY tanımlı değil veya servis şu an yanıt vermiyor. Hazır şablonla uydurma rapor üretilmez.' },
+        { status: 503 }
+      );
+    }
 
     let savedId: string | null = null;
     try {
-      const session = await auth();
-      if (session?.user?.id) {
+      if (session.user.id !== 'admin-demo-user') {
         const saved = await prisma.manualEntry.create({
           data: {
             userId: session.user.id,
