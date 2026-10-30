@@ -7,7 +7,7 @@ import { useSession, signOut } from 'next-auth/react';
 import BrandSwitcher from '@/components/brand-switcher';
 import {
   LayoutDashboard, Upload, Activity, Settings, LogOut,
-  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText, Store,
+  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText, Store, CalendarRange,
 } from 'lucide-react';
 
 interface SidebarLayoutProps {
@@ -21,7 +21,8 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/report', label: 'Müşteri Raporu', icon: FileText },
+    { href: '/reports', label: 'Aylık Raporlar', icon: FileText },
+    { href: '/report', label: 'Özel Dönem Raporu', icon: CalendarRange },
     { href: '/seo-geo', label: 'SEO & GEO Raporu', icon: Compass },
     { href: '/competitor', label: 'Rakip Analizi', icon: Swords },
     { href: '/goals', label: 'Hedeflerim', icon: Target },

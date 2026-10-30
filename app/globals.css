@@ -159,3 +159,81 @@
 
 /* PNG dışa aktarımı sırasında not metnini göster (textarea görüntüye girmez) */
 .is-exporting .report-notes { display: block !important; }
+/* ═══ Müşteri rapor belgesi (A4, temadan bağımsız, her zaman açık zemin) ═══ */
+.report-doc {
+  --doc-ink: #111827;
+  --doc-muted: #6b7280;
+  --doc-line: #e5e7eb;
+  --doc-accent: #4f46e5;
+  color: var(--doc-ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.report-doc .doc-page {
+  page: report;
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 16mm 12mm;
+  background: #ffffff;
+  color: var(--doc-ink);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 8px 24px rgb(0 0 0 / 0.08);
+  border-radius: 4px;
+}
+.report-doc .doc-body { flex: 1; }
+.report-doc .doc-footer {
+  margin-top: 10mm;
+  padding-top: 3mm;
+  border-top: 1px solid var(--doc-line);
+  font-size: 9pt;
+  color: var(--doc-muted);
+}
+.report-doc .doc-cover { padding: 0; position: relative; overflow: hidden; }
+.report-doc .doc-cover-band { height: 14mm; background: var(--doc-accent); }
+.report-doc .doc-cover-inner { padding: 40mm 20mm 20mm; }
+.report-doc .doc-logo { width: 28mm; height: 28mm; object-fit: contain; border-radius: 6mm; border: 1px solid var(--doc-line); background: #fff; }
+.report-doc .doc-logo-fallback { display: flex; align-items: center; justify-content: center; font-size: 30pt; font-weight: 700; color: var(--doc-accent); background: #eef2ff; }
+.report-doc .doc-eyebrow { margin-top: 18mm; font-size: 11pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--doc-accent); }
+.report-doc .doc-title { margin-top: 3mm; font-size: 34pt; line-height: 1.1; font-weight: 800; }
+.report-doc .doc-subtitle { margin-top: 3mm; font-size: 18pt; color: var(--doc-muted); }
+.report-doc .doc-cover-meta { margin-top: 30mm; display: grid; gap: 4mm; font-size: 11pt; }
+.report-doc .doc-cover-meta dt { font-size: 9pt; color: var(--doc-muted); }
+.report-doc .doc-cover-meta dd { font-weight: 600; }
+.report-doc .doc-draft { display: inline-block; padding: 1mm 3mm; border-radius: 2mm; background: #fef3c7; color: #92400e; font-size: 9pt; letter-spacing: 0.05em; }
+.report-doc .doc-h2 { font-size: 16pt; font-weight: 700; margin: 0 0 5mm; padding-bottom: 2mm; border-bottom: 2px solid var(--doc-accent); }
+.report-doc .doc-h2:not(:first-child) { margin-top: 9mm; }
+.report-doc .doc-h3 { font-size: 12pt; font-weight: 700; margin: 7mm 0 3mm; }
+.report-doc .doc-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+.report-doc .doc-kpi { border: 1px solid var(--doc-line); border-radius: 3mm; padding: 3.5mm; break-inside: avoid; }
+.report-doc .doc-kpi-label { font-size: 8.5pt; color: var(--doc-muted); }
+.report-doc .doc-kpi-value { font-size: 16pt; font-weight: 700; margin-top: 1mm; font-variant-numeric: tabular-nums; }
+.report-doc .doc-kpi-change { font-size: 8pt; margin-top: 1mm; }
+.report-doc .doc-list { list-style: disc; padding-left: 5mm; display: grid; gap: 1.8mm; font-size: 10pt; line-height: 1.5; }
+.report-doc .doc-small { font-size: 9pt; color: #374151; }
+.report-doc .doc-actions { list-style: decimal; padding-left: 6mm; display: grid; gap: 2.5mm; font-size: 10.5pt; line-height: 1.5; }
+.report-doc .doc-actions li::marker { color: var(--doc-accent); font-weight: 700; }
+.report-doc .doc-text { font-size: 10.5pt; line-height: 1.6; white-space: pre-wrap; }
+.report-doc .doc-note { margin-top: 4mm; padding: 3mm; border-radius: 2mm; background: #fffbeb; color: #92400e; font-size: 9pt; }
+.report-doc .doc-caption { font-size: 8.5pt; color: var(--doc-muted); margin-bottom: 3mm; }
+.report-doc .doc-generated { margin-top: 8mm; }
+.report-doc .doc-chart { break-inside: avoid; }
+.report-doc .doc-table { width: 100%; border-collapse: collapse; font-size: 9pt; font-variant-numeric: tabular-nums; }
+.report-doc .doc-table th { text-align: left; font-weight: 600; color: var(--doc-muted); padding: 2mm 1.5mm; border-bottom: 1.5px solid #d1d5db; white-space: nowrap; }
+.report-doc .doc-table td { padding: 2mm 1.5mm; border-bottom: 1px solid var(--doc-line); white-space: nowrap; }
+.report-doc .doc-table td.doc-wrap { white-space: normal; max-width: 62mm; word-break: break-word; }
+.report-doc .doc-table tr { break-inside: avoid; }
+.report-doc .doc-table thead { display: table-header-group; }
+
+@page report { size: A4; margin: 0; }
+@media print {
+  .report-doc { gap: 0; display: block; }
+  /* Uzun tablo sonraki sayfaya taşarsa iç boşluk o sayfada da uygulanır */
+  .report-doc .doc-page { box-shadow: none; border-radius: 0; break-after: page; margin: 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .report-doc .doc-page:last-child { break-after: auto; }
+  .report-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

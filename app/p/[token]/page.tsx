@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { hashShareToken, isWellFormedToken, linkState, parseSections } from '@/lib/share-token';
-import { availableMonths, buildBrandMonthReport, uptimeSummary } from '@/lib/report/brand-report';
+import { uptimeSummary } from '@/lib/report/brand-report';
+import { publishedDocument } from '@/lib/report/document-server';
 import { goalProgress } from '@/lib/report/goal-progress';
 import { isMonth } from '@/lib/report/months';
 import PortalView from './_components/portal-view';
@@ -48,11 +49,23 @@ async function loadPortal(token: string, ay: unknown): Promise<PortalResult> {
     const sections = parseSections(link.sections);
     const brand = link.brand;
 
-    const months = sections.includes('report') ? await availableMonths(brand.id) : [];
+    // Müşteri yalnızca yayınlanmış (dondurulmuş) aylık raporları görür
+    const published = sections.includes('report')
+      ? await prisma.reportSnapshot.findMany({
+          where: { brandId: brand.id, publishedAt: { not: null } },
+          select: { month: true },
+          orderBy: { month: 'desc' },
+        })
+      : [];
+    const months = published.map((s) => s.month);
     const month = isMonth(ay) && months.includes(ay) ? ay : months[0] ?? null;
 
-    const [report, goals, uptime] = await Promise.all([
-      month ? buildBrandMonthReport(brand.id, month, brand.currency) : null,
+    const [document, goals, uptime] = await Promise.all([
+      month
+        ? prisma.reportSnapshot
+            .findUnique({ where: { brandId_month: { brandId: brand.id, month } } })
+            .then(publishedDocument)
+        : null,
       sections.includes('goals') ? goalProgress(brand.id) : null,
       sections.includes('uptime') ? uptimeSummary(brand.id) : null,
     ]);
@@ -63,7 +76,8 @@ async function loadPortal(token: string, ay: unknown): Promise<PortalResult> {
         brand: { name: brand.name, logoUrl: brand.logoUrl, website: brand.website, currency: brand.currency },
         sections,
         months,
-        report,
+        document,
+        printHref: month ? `/p/${token}/rapor/${month}` : null,
         goals,
         uptime,
         generatedAt: now.toISOString(),

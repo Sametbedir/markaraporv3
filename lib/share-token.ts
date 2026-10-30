@@ -12,7 +12,7 @@ export const SHARE_SECTIONS = ['report', 'goals', 'uptime'] as const;
 export type ShareSection = (typeof SHARE_SECTIONS)[number];
 
 export const SECTION_LABELS: Record<ShareSection, string> = {
-  report: 'Aylık performans raporu',
+  report: 'Aylık raporlar (yayınladıklarınız)',
   goals: 'Hedef ilerlemesi',
   uptime: 'Site erişilebilirliği (uptime)',
 };

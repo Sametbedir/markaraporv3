@@ -101,6 +101,7 @@ model Brand {
   uptimeMonitors UptimeMonitor[]
   simulations    SimulationResult[]
   shareLinks     ShareLink[]
+  reports        ReportSnapshot[]
 
   @@index([userId])
   @@map("brands")
@@ -375,4 +376,24 @@ model ShareLink {
 
   @@index([brandId])
   @@map("share_links")
+}
+
+/// Bir markanın aylık raporu. Notlar taslak olarak saklanır; yayınlanınca o anki veriler
+/// dataJson'a dondurulur ve müşteri linkinde tam bu hali görünür (veri sonradan değişse bile).
+model ReportSnapshot {
+  id          String    @id @default(uuid())
+  brandId     String    @map("brand_id")
+  userId      String    @map("user_id")
+  month       String // YYYY-MM
+  summary     String    @default("") // Değerlendirme
+  actions     String    @default("") // Aksiyon planı
+  dataJson    String?   @map("data_json")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, month])
+  @@map("report_snapshots")
 }

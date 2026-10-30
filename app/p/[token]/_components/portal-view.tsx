@@ -2,36 +2,28 @@
 
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import { Store, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, XCircle, Target, Activity, BarChart3 } from 'lucide-react';
-import type { BrandMonthReport, UptimeSummary } from '@/lib/report/brand-report';
+import { Store, FileDown, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, XCircle, Target, Activity, BarChart3 } from 'lucide-react';
+import type { UptimeSummary } from '@/lib/report/brand-report';
+import type { ReportDocumentData } from '@/lib/report/document';
+import { splitLines } from '@/lib/report/document';
+import { reportHighlights } from '@/lib/report/highlights';
 import type { GoalProgressRow } from '@/lib/report/goal-progress';
 import type { ShareSection } from '@/lib/share-token';
 import type { ReportKpis } from '@/lib/report/metrics';
 import { percentChange } from '@/lib/report/metrics';
 import { monthLabel } from '@/lib/report/months';
+import { moneyFormatter, num, trDate } from '@/lib/report/format';
 
 type Props = {
   brand: { name: string; logoUrl: string | null; website: string | null; currency: string };
   sections: ShareSection[];
   months: string[];
-  report: BrandMonthReport | null;
+  document: ReportDocumentData | null;
+  printHref: string | null;
   goals: GoalProgressRow[] | null;
   uptime: UptimeSummary[] | null;
   generatedAt: string;
 };
-
-const num = (v: number | null, digits = 0) =>
-  v === null ? '—' : v.toLocaleString('tr-TR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-
-function moneyFormatter(currency: string | null) {
-  return (v: number | null, digits = 0) => {
-    if (v === null) return '—';
-    if (!currency) return num(v, digits);
-    return v.toLocaleString('tr-TR', { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits });
-  };
-}
-
-const trDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('tr-TR', { timeZone: 'UTC' });
 
 function Change({ current, previous, lowerIsBetter, neutral }: { current: number | null; previous: number | null; lowerIsBetter?: boolean; neutral?: boolean }) {
   const change = percentChange(current, previous);
@@ -88,14 +80,17 @@ function Section({ icon: Icon, title, children }: { icon: React.ElementType; tit
 const th = 'px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap';
 const td = 'px-3 py-2 text-sm text-foreground whitespace-nowrap tabular-nums';
 
-function ReportSection({ report, months, money }: { report: BrandMonthReport | null; months: string[]; money: ReturnType<typeof moneyFormatter> }) {
-  if (!report) {
+function ReportSection({ doc, months, money, printHref }: { doc: ReportDocumentData | null; months: string[]; money: ReturnType<typeof moneyFormatter>; printHref: string | null }) {
+  if (!doc) {
     return (
       <Section icon={BarChart3} title="Aylık performans">
-        <p className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Henüz raporlanacak veri yok.</p>
+        <p className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Henüz yayınlanmış rapor yok.</p>
       </Section>
     );
   }
+  const report = doc.report;
+  const highlights = reportHighlights(report, money);
+  const actionItems = splitLines(doc.actions);
   return (
     <Section icon={BarChart3} title={`Aylık performans · ${monthLabel(report.month)}`}>
       {months.length > 1 && (
@@ -111,6 +106,35 @@ function ReportSection({ report, months, money }: { report: BrandMonthReport | n
             </a>
           ))}
         </nav>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {doc.publishedAt && `Yayın tarihi: ${new Date(doc.publishedAt).toLocaleDateString('tr-TR')}`}
+          {doc.preparedBy && ` · Hazırlayan: ${doc.preparedBy}`}
+        </p>
+        {printHref && (
+          <a href={printHref} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground">
+            <FileDown className="w-4 h-4" aria-hidden="true" /> Raporu indir (PDF / PNG)
+          </a>
+        )}
+      </div>
+
+      {(highlights.length > 0 || doc.summary.trim()) && (
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          {highlights.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Öne çıkanlar</h3>
+              <ul className="mt-2 list-disc pl-5 space-y-1 text-sm text-foreground">{highlights.map((h) => <li key={h}>{h}</li>)}</ul>
+            </div>
+          )}
+          {doc.summary.trim() && (
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Değerlendirme</h3>
+              <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{doc.summary.trim()}</p>
+            </div>
+          )}
+        </div>
       )}
 
       {report.mixedCurrencies && (
@@ -187,6 +211,13 @@ function ReportSection({ report, months, money }: { report: BrandMonthReport | n
         </>
       ) : (
         <p className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Bu ay için veri yok.</p>
+      )}
+
+      {actionItems.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <h3 className="text-sm font-semibold text-foreground">Aksiyon planı</h3>
+          <ol className="mt-2 list-decimal pl-5 space-y-1 text-sm text-foreground">{actionItems.map((a, i) => <li key={i}>{a}</li>)}</ol>
+        </div>
       )}
     </Section>
   );
@@ -267,8 +298,8 @@ function UptimeSection({ uptime }: { uptime: UptimeSummary[] }) {
   );
 }
 
-export default function PortalView({ brand, sections, months, report, goals, uptime, generatedAt }: Props) {
-  const money = moneyFormatter(report ? report.currency : brand.currency);
+export default function PortalView({ brand, sections, months, document, printHref, goals, uptime, generatedAt }: Props) {
+  const money = moneyFormatter(document ? document.report.currency : brand.currency);
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
@@ -287,7 +318,7 @@ export default function PortalView({ brand, sections, months, report, goals, upt
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-10">
-        {sections.includes('report') && <ReportSection report={report} months={months} money={money} />}
+        {sections.includes('report') && <ReportSection doc={document} months={months} money={money} printHref={printHref} />}
         {sections.includes('goals') && goals && <GoalsSection goals={goals} money={money} />}
         {sections.includes('uptime') && uptime && <UptimeSection uptime={uptime} />}
 

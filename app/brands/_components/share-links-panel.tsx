@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 type Section = 'report' | 'goals' | 'uptime';
 const SECTION_LABELS: Record<Section, string> = {
-  report: 'Aylık performans raporu',
+  report: 'Aylık raporlar (yayınladıklarınız)',
   goals: 'Hedef ilerlemesi',
   uptime: 'Site erişilebilirliği (uptime)',
 };
