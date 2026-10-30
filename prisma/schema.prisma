@@ -100,6 +100,7 @@ model Brand {
   goals          Goal[]
   uptimeMonitors UptimeMonitor[]
   simulations    SimulationResult[]
+  shareLinks     ShareLink[]
 
   @@index([userId])
   @@map("brands")
@@ -353,4 +354,25 @@ model SimulationResult {
   @@index([userId])
   @@index([brandId])
   @@map("simulation_results")
+}
+
+/// Müşteriye gönderilen salt-okunur link. Linkin kendisi saklanmaz, yalnızca SHA-256 özeti tutulur.
+model ShareLink {
+  id           String    @id @default(uuid())
+  brandId      String    @map("brand_id")
+  userId       String    @map("user_id")
+  label        String
+  tokenHash    String    @unique @map("token_hash")
+  // Müşterinin görebileceği bölümler (JSON dizi): ["report","goals","uptime"]
+  sections     String    @default("[\"report\"]")
+  expiresAt    DateTime? @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  lastViewedAt DateTime? @map("last_viewed_at")
+  viewCount    Int       @default(0) @map("view_count")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@map("share_links")
 }

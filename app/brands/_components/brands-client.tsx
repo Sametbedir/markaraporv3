@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Store, Plus, Pencil, Archive, ArchiveRestore, Check, X, ImagePlus, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import type { BrandSummary } from '@/components/brand-switcher';
+import ShareLinksPanel from './share-links-panel';
 
 const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP'];
 const LOGO_MAX_BYTES = 200 * 1024;
@@ -279,6 +280,8 @@ export default function BrandsClient() {
           )}
         </>
       )}
+
+      {!loading && !error && activeId && <ShareLinksPanel />}
 
       <p className="text-xs text-muted-foreground">
         Gider yapısı (komisyon, kargo, iade, ürün maliyeti) aktif markaya göre Ayarlar sayfasından girilir.
