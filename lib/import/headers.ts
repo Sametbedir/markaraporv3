@@ -42,11 +42,11 @@ export const FIELD_LABELS: Record<AdField, string> = {
 };
 
 export const FIELD_ALIASES: Record<AdField, string[]> = {
-  date: ['tarih', 'date', 'day', 'gun', 'reportingstarts', 'raporlamabaslangici', 'raporlamabaslangic'],
+  date: ['tarih', 'date', 'day', 'gun', 'reportingstarts', 'raporlamabaslangici', 'raporlamabaslangic', 'bydate', 'byday', 'bytime'],
   dateEnd: ['reportingends', 'raporlamabitisi', 'raporlamabitis'],
   platform: ['platform', 'kanal', 'channel', 'network', 'ag'],
   campaign: ['kampanya', 'kampanyaadi', 'campaign', 'campaignname'],
-  currency: ['currency', 'currencycode', 'parabirimi'],
+  currency: ['currency', 'currencycode', 'parabirimi', 'parabirimikodu'],
   spend: [
     'harcama', 'spend', 'amountspent', 'harcanantutar', 'cost', 'maliyet', 'reklamharcamasi',
     'totalcost', 'toplammaliyet', 'toplamharcama',
@@ -55,13 +55,15 @@ export const FIELD_ALIASES: Record<AdField, string[]> = {
     'ciro', 'gelir', 'revenue', 'conversionvalue', 'convvalue', 'donusumdegeri',
     'purchasesconversionvalue', 'satinalmalardonusumdegeri', 'satinalmadonusumdegeri',
     'websitepurchasesconversionvalue', 'purchasevalue', 'totalpurchasevalue', 'satisgeliri',
+    // Google Ads (TR) kısaltması ve TikTok Ads
+    'donusdegeri', 'totalcompletepaymentvalue', 'completepaymentvalue', 'totalpurchasevaluewebsite',
   ],
   conversions: [
     'siparis', 'siparissayisi', 'orders', 'purchases', 'satinalmalar', 'satinalma',
-    'websitepurchases', 'conversions', 'conv', 'donusumler', 'donusum',
+    'websitepurchases', 'conversions', 'conv', 'donusumler', 'donusum', 'completepayment', 'purchaseswebsite',
   ],
   impressions: ['gosterim', 'gosterimler', 'impressions', 'impr', 'impression'],
-  clicks: ['tiklama', 'tiklamalar', 'clicks', 'click', 'linkclicks', 'baglantitiklamalari', 'clicksall', 'tiklamalartumu'],
+  clicks: ['tiklama', 'tiklamalar', 'clicks', 'click', 'linkclicks', 'baglantitiklamalari', 'clicksall', 'tiklamalartumu', 'clicksdestination'],
   reach: ['reach', 'erisim'],
 };
 
@@ -145,7 +147,14 @@ const PLATFORM_SIGNATURES: { platform: string; keys: string[] }[] = [
     platform: 'Meta Ads',
     keys: ['amountspent', 'harcanantutar', 'reportingstarts', 'raporlamabaslangici', 'purchasesconversionvalue', 'satinalmalardonusumdegeri', 'linkclicks', 'baglantitiklamalari'],
   },
-  { platform: 'Google Ads', keys: ['convvalue', 'impr', 'currencycode', 'allconvvalue', 'costconv'] },
+  {
+    platform: 'Google Ads',
+    keys: ['convvalue', 'impr', 'currencycode', 'allconvvalue', 'costconv', 'parabirimikodu', 'donusdegeri', 'donusdegerimaliyet', 'tumdonusdegeri'],
+  },
+  {
+    platform: 'TikTok Ads',
+    keys: ['clicksdestination', 'cpcdestination', 'ctrdestination', 'completepayment', 'totalcompletepaymentvalue', 'completepaymentroas'],
+  },
 ];
 
 export function detectPlatformFromHeaders(headerRow: unknown[]): string | null {

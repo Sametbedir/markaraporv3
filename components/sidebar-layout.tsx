@@ -7,7 +7,7 @@ import { useSession, signOut } from 'next-auth/react';
 import BrandSwitcher from '@/components/brand-switcher';
 import {
   LayoutDashboard, Upload, Activity, Settings, LogOut,
-  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText, Store, CalendarRange,
+  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText, Store, CalendarRange, SlidersHorizontal,
 } from 'lucide-react';
 
 interface SidebarLayoutProps {
@@ -28,6 +28,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
     { href: '/goals', label: 'Hedeflerim', icon: Target },
     { href: '/simulation', label: 'Simülatör', icon: Calculator },
     { href: '/upload', label: 'Veri Yükle', icon: Upload },
+    { href: '/metrics', label: 'Metrikler', icon: SlidersHorizontal },
     { href: '/uptime', label: 'Uptime Takibi', icon: Activity },
     { href: '/brands', label: 'Markalar', icon: Store },
     { href: '/settings', label: 'Ayarlar', icon: Settings },

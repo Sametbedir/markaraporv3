@@ -12,7 +12,7 @@ export async function preparedByFor(userId: string): Promise<string> {
 /** Güncel verilerle (taslak) belge. */
 export async function liveDocument(brand: Brand, userId: string, month: string, snapshot: ReportSnapshot | null): Promise<ReportDocumentData> {
   const [report, preparedBy] = await Promise.all([
-    buildBrandMonthReport(brand.id, month, brand.currency),
+    buildBrandMonthReport(brand, month),
     preparedByFor(userId),
   ]);
   return {

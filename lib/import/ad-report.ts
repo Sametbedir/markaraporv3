@@ -17,6 +17,7 @@ import {
   detectPlatformFromHeaders,
   mapHeaders,
   normalizeCurrency,
+  normalizeHeader,
 } from './headers';
 import { DecimalStyle, detectDecimalStyle, parseNumber } from './numbers';
 
@@ -32,16 +33,29 @@ export type AdRow = {
   impressions: number | null;
   clicks: number | null;
   reach: number | null;
+  /** Markaya özel metrikler (anahtar → değer); dosyada boşsa null */
+  custom: Record<string, number | null>;
   /** Bu satırı oluşturan dosya satır numaraları (1'den başlar, başlık dahil) */
   sourceRows: number[];
 };
 
 export type ImportIssue = { code: string; message: string; rows: number[] };
 
+/** Sütunu toplanarak saklanan markaya özel metrik (örn. "Potansiyel müşteriler"). */
+export type CustomColumn = { index: number; key: string; label: string };
+
+/** Kullanıcının önizleme ekranında onayladığı eşleme; verilmezse başlıklar otomatik eşlenir. */
+export type ColumnMapping = {
+  headerRowIndex: number;
+  fields: Partial<Record<AdField, number>>;
+  custom: CustomColumn[];
+};
+
 export type AdReportResult = {
   ok: boolean;
   rows: AdRow[];
   mapping: Partial<Record<AdField, string>>;
+  customColumns: { key: string; label: string; header: string }[];
   unmappedColumns: string[];
   /** Dosyada hiç bulunmayan metrik alanları. Bu alanlar eksik kabul edilir, 0 değil. */
   missingFields: MetricField[];
@@ -70,7 +84,7 @@ class IssueCollector {
   }
 }
 
-function findHeaderRow(table: unknown[][]): { index: number; mapping: HeaderMapping } | null {
+export function findHeaderRow(table: unknown[][]): { index: number; mapping: HeaderMapping } | null {
   for (let i = 0; i < Math.min(MAX_HEADER_SCAN, table.length); i++) {
     const mapping = mapHeaders(table[i] ?? []);
     const hasDate = mapping.columns.date !== undefined;
@@ -78,6 +92,32 @@ function findHeaderRow(table: unknown[][]): { index: number; mapping: HeaderMapp
     if (hasDate && metricCount >= 1) return { index: i, mapping };
   }
   return null;
+}
+
+/** Elle verilen eşlemeyi otomatik eşlemeyle aynı biçime çevirir. */
+function explicitHeader(table: unknown[][], m: ColumnMapping): { index: number; mapping: HeaderMapping } {
+  const row = table[m.headerRowIndex] ?? [];
+  const headers: Partial<Record<AdField, string>> = {};
+  const used = new Set<number>(m.custom.map((c) => c.index));
+  for (const [field, idx] of Object.entries(m.fields) as [AdField, number][]) {
+    headers[field] = String(row[idx] ?? '');
+    used.add(idx);
+  }
+  const headerCurrencies = new Set<string>();
+  for (const f of METRIC_FIELDS) {
+    const idx = m.fields[f];
+    const currency = idx === undefined ? null : normalizeHeader(String(row[idx] ?? '')).currency;
+    if (currency) headerCurrencies.add(currency);
+  }
+  return {
+    index: m.headerRowIndex,
+    mapping: {
+      columns: { ...m.fields },
+      headers,
+      unmapped: row.map((h, i) => ({ h: String(h ?? '').trim(), i })).filter(({ h, i }) => h && !used.has(i)).map(({ h }) => h),
+      headerCurrencies: [...headerCurrencies],
+    },
+  };
 }
 
 function isTotalRow(cells: unknown[]): boolean {
@@ -90,12 +130,13 @@ function sumNullable(a: number | null, b: number | null): number | null {
   return a + b;
 }
 
-export function parseAdReport(table: unknown[][]): AdReportResult {
+export function parseAdReport(table: unknown[][], options: { mapping?: ColumnMapping } = {}): AdReportResult {
   const issues = new IssueCollector();
   const empty: AdReportResult = {
     ok: false,
     rows: [],
     mapping: {},
+    customColumns: [],
     unmappedColumns: [],
     missingFields: [...METRIC_FIELDS],
     currency: null,
@@ -108,7 +149,17 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
     errors: [],
   };
 
-  const header = findHeaderRow(table);
+  const custom = options.mapping?.custom ?? [];
+  if (options.mapping) {
+    const m = options.mapping;
+    const hasMetric = METRIC_FIELDS.some((f) => m.fields[f] !== undefined) || custom.length > 0;
+    if (m.fields.date === undefined || !hasMetric || !table[m.headerRowIndex]) {
+      empty.errors.push('Eşlemede bir tarih sütunu ve en az bir metrik (veya özel metrik) sütunu seçilmeli.');
+      return empty;
+    }
+  }
+
+  const header = options.mapping ? explicitHeader(table, options.mapping) : findHeaderRow(table);
   if (!header) {
     const firstRow = (table[0] ?? []).map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 10);
     empty.errors.push(
@@ -134,6 +185,7 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
       const idx = columns[f];
       if (idx !== undefined) samples.push(row[idx]);
     }
+    for (const c of custom) samples.push(row[c.index]);
   }
   const detected = detectDecimalStyle(samples);
   const decimalStyle: DecimalStyle = detected ?? 'comma';
@@ -206,7 +258,18 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
       metrics[field] = value;
     }
 
-    if (METRIC_FIELDS.every((f) => metrics[f] === null)) {
+    const customValues: Record<string, number | null> = {};
+    for (const c of custom) {
+      const parsed = parseNumber(row[c.index], decimalStyle);
+      if (parsed.invalid) issues.add(`invalid_custom_${c.key}`, `"${c.label}" sütununda okunamayan değerler eksik sayıldı.`, rowNumber);
+      if (parsed.value !== null && parsed.value < 0) {
+        issues.add(`negative_custom_${c.key}`, `"${c.label}" sütununda negatif değerler var; olduğu gibi alındı.`, rowNumber);
+      }
+      if (parsed.ambiguous) ambiguousSeen = true;
+      customValues[c.key] = sumNullable(customValues[c.key] ?? null, parsed.value);
+    }
+
+    if (METRIC_FIELDS.every((f) => metrics[f] === null) && Object.values(customValues).every((v) => v === null)) {
       issues.add('empty_metrics', 'Hiç metrik değeri olmayan satırlar atlandı.', rowNumber);
       return;
     }
@@ -225,11 +288,12 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
         }
         existing[f] = sumNullable(existing[f], metrics[f]);
       }
+      for (const c of custom) existing.custom[c.key] = sumNullable(existing.custom[c.key] ?? null, customValues[c.key] ?? null);
       existing.sourceRows.push(rowNumber);
       return;
     }
 
-    merged.set(key, { date, dateEnd, platform, campaign, ...metrics, sourceRows: [rowNumber] });
+    merged.set(key, { date, dateEnd, platform, campaign, ...metrics, custom: customValues, sourceRows: [rowNumber] });
   });
 
   if (ambiguousSeen && !detected) {
@@ -253,6 +317,7 @@ export function parseAdReport(table: unknown[][]): AdReportResult {
     ok: errors.length === 0,
     rows,
     mapping: headers,
+    customColumns: custom.map((c) => ({ key: c.key, label: c.label, header: String(table[header.index]?.[c.index] ?? '') })),
     unmappedColumns: unmapped,
     missingFields,
     currency,

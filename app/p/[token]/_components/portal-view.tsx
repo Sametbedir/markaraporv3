@@ -9,8 +9,8 @@ import { splitLines } from '@/lib/report/document';
 import { reportHighlights } from '@/lib/report/highlights';
 import type { GoalProgressRow } from '@/lib/report/goal-progress';
 import type { ShareSection } from '@/lib/share-token';
-import type { ReportKpis } from '@/lib/report/metrics';
 import { percentChange } from '@/lib/report/metrics';
+import { PORTAL_DEFAULT_KPIS, reportKpiItems } from '@/lib/report/kpi-items';
 import { monthLabel } from '@/lib/report/months';
 import { moneyFormatter, num, trDate } from '@/lib/report/format';
 
@@ -40,22 +40,12 @@ function Change({ current, previous, lowerIsBetter, neutral }: { current: number
   );
 }
 
-function Kpis({ c, p, money }: { c: ReportKpis; p: ReportKpis | null; money: ReturnType<typeof moneyFormatter> }) {
-  const items: { label: string; value: string; cur: number | null; prev: number | null; lowerIsBetter?: boolean; neutral?: boolean; hint: string }[] = [
-    { label: 'Reklam harcaması', value: money(c.spend), cur: c.spend, prev: p?.spend ?? null, neutral: true, hint: 'Toplam harcama' },
-    { label: 'Dönüşüm değeri', value: money(c.conversionValue), cur: c.conversionValue, prev: p?.conversionValue ?? null, hint: 'Reklam platformlarının bildirdiği' },
-    { label: 'ROAS', value: c.roas === null ? '—' : `${num(c.roas, 2)}x`, cur: c.roas, prev: p?.roas ?? null, hint: 'Dönüşüm değeri ÷ harcama' },
-    { label: 'Dönüşüm', value: num(c.conversions), cur: c.conversions, prev: p?.conversions ?? null, hint: 'Platformların bildirdiği' },
-    { label: 'Dönüşüm başı maliyet', value: money(c.cpa, 2), cur: c.cpa, prev: p?.cpa ?? null, lowerIsBetter: true, hint: 'Harcama ÷ dönüşüm' },
-    { label: 'Tıklama oranı (CTR)', value: c.ctr === null ? '—' : `%${num(c.ctr, 2)}`, cur: c.ctr, prev: p?.ctr ?? null, hint: 'Tıklama ÷ gösterim' },
-  ];
-  if (c.storeOrders !== null) {
-    items.push({ label: 'Mağaza siparişi', value: num(c.storeOrders), cur: c.storeOrders, prev: p?.storeOrders ?? null, hint: 'Mağazadan gelen sipariş' });
-  }
+function Kpis({ report, money }: { report: ReportDocumentData['report']; money: ReturnType<typeof moneyFormatter> }) {
+  const items = reportKpiItems(report, money, PORTAL_DEFAULT_KPIS);
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
       {items.map((k) => (
-        <div key={k.label} className="rounded-2xl border border-border bg-card p-4">
+        <div key={k.key} className="rounded-2xl border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">{k.label}</p>
           <p className="mt-1 text-xl sm:text-2xl font-bold text-foreground tabular-nums">{k.value}</p>
           <Change current={k.cur} previous={k.prev} lowerIsBetter={k.lowerIsBetter} neutral={k.neutral} />
@@ -145,7 +135,7 @@ function ReportSection({ doc, months, money, printHref }: { doc: ReportDocumentD
 
       {report.current ? (
         <>
-          <Kpis c={report.current} p={report.previous} money={money} />
+          <Kpis report={report} money={money} />
 
           {report.trend.length > 1 && (
             <div className="rounded-2xl border border-border bg-card p-4">

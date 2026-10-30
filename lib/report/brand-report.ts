@@ -8,6 +8,8 @@ import { storeOrderWhere } from '@/lib/store-orders';
 import type { CampaignPerformance } from '@/lib/types';
 import { activeCampaigns, hasActivity, kpis, platformBreakdown, type PlatformRow, type ReportKpis, type ReportTotals } from './metrics';
 import { monthRange, previousMonth } from './months';
+import { computeExtras, type ExtraMetric } from '@/lib/metrics/extra';
+import { parseKpiKeys } from '@/lib/metrics/catalog';
 
 export type BrandMonthReport = {
   month: string;
@@ -21,7 +23,20 @@ export type BrandMonthReport = {
   /** Tek para birimi varsa o; birden fazlaysa null (karışık para birimi uyarısı gösterilir) */
   currency: string | null;
   mixedCurrencies: boolean;
+  /** Markanın seçtiği KPI'lar (sıralı); null ise varsayılan set gösterilir */
+  kpiKeys: string[] | null;
+  /** Markaya özel ve formül metrikleri */
+  extra: ExtraMetric[];
 };
+
+async function customSums(brandId: string, start: string, end: string): Promise<Record<string, number>> {
+  const rows = await prisma.customMetricValue.groupBy({
+    by: ['key'],
+    where: { brandId, date: { gte: utc(start), lte: utc(end) } },
+    _sum: { value: true },
+  });
+  return Object.fromEntries(rows.filter((r) => r._sum.value !== null).map((r) => [r.key, r._sum.value as number]));
+}
 
 const utc = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
@@ -53,10 +68,21 @@ export async function availableMonths(brandId: string): Promise<string[]> {
   return rows.map((r) => r.m);
 }
 
-export async function buildBrandMonthReport(brandId: string, month: string, fallbackCurrency: string): Promise<BrandMonthReport> {
+export async function buildBrandMonthReport(
+  brand: { id: string; currency: string; reportKpis: string | null },
+  month: string
+): Promise<BrandMonthReport> {
+  const brandId = brand.id;
+  const fallbackCurrency = brand.currency;
   const { start, end } = monthRange(month);
   const prev = monthRange(previousMonth(month));
   const range = { gte: utc(start), lte: utc(end) };
+
+  const [defs, customCur, customPrev] = await Promise.all([
+    prisma.metricDefinition.findMany({ where: { brandId }, orderBy: { createdAt: 'asc' } }),
+    customSums(brandId, start, end),
+    customSums(brandId, prev.start, prev.end),
+  ]);
 
   const [cur, prevTotals, daily, byCampaign, currencies] = await Promise.all([
     totals(brandId, start, end),
@@ -125,6 +151,12 @@ export async function buildBrandMonthReport(brandId: string, month: string, fall
     campaigns: active,
     currency: codes.length === 1 ? codes[0] : codes.length === 0 ? fallbackCurrency : null,
     mixedCurrencies: codes.length > 1,
+    kpiKeys: parseKpiKeys(brand.reportKpis),
+    extra: computeExtras(
+      defs,
+      { totals: hasActivity(cur) ? cur : null, custom: customCur },
+      { totals: hasActivity(prevTotals) ? prevTotals : null, custom: customPrev }
+    ),
   };
 }
 

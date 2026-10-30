@@ -18,7 +18,7 @@ function report(over: Partial<BrandMonthReport> = {}): BrandMonthReport {
     current: kpis({ spend: 1000, conversionValue: 3760, conversions: 40, impressions: 10000, clicks: 500, storeOrders: null }),
     previous: kpis({ spend: 800, conversionValue: 2400, conversions: 30, impressions: 9000, clicks: 450, storeOrders: null }),
     trend: [], platforms: platformBreakdown(campaigns), campaigns,
-    currency: 'TRY', mixedCurrencies: false, ...over,
+    currency: 'TRY', mixedCurrencies: false, kpiKeys: null, extra: [], ...over,
   };
 }
 

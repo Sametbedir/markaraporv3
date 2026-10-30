@@ -77,6 +77,8 @@ model Brand {
   logoUrl    String?   @map("logo_url")
   currency   String    @default("TRY")
   archivedAt DateTime? @map("archived_at")
+  // Raporda ve müşteri sayfasında gösterilecek metrik anahtarları (JSON dizi); boşsa varsayılan set
+  reportKpis String?   @map("report_kpis")
 
   // Gider yapısı (marka bazında)
   commissionRateTrendyol    Float @default(0) @map("commission_rate_trendyol")
@@ -91,17 +93,20 @@ model Brand {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user           User               @relation(fields: [userId], references: [id])
-  campaigns      Campaign[]
-  dailyMetrics   DailyMetric[]
-  orders         Order[]
-  manualEntries  ManualEntry[]
-  uploadLogs     UploadLog[]
-  goals          Goal[]
-  uptimeMonitors UptimeMonitor[]
-  simulations    SimulationResult[]
-  shareLinks     ShareLink[]
-  reports        ReportSnapshot[]
+  user            User                @relation(fields: [userId], references: [id])
+  campaigns       Campaign[]
+  dailyMetrics    DailyMetric[]
+  orders          Order[]
+  manualEntries   ManualEntry[]
+  uploadLogs      UploadLog[]
+  goals           Goal[]
+  uptimeMonitors  UptimeMonitor[]
+  simulations     SimulationResult[]
+  shareLinks      ShareLink[]
+  reports         ReportSnapshot[]
+  customValues    CustomMetricValue[]
+  metricDefs      MetricDefinition[]
+  importTemplates ImportTemplate[]
 
   @@index([userId])
   @@map("brands")
@@ -263,10 +268,11 @@ model UploadLog {
   reportJson   String?   @map("report_json") // eşleme, eksik alanlar ve uyarılar (JSON)
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  user         User          @relation(fields: [userId], references: [id])
-  brand        Brand?        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id])
+  brand        Brand?              @relation(fields: [brandId], references: [id], onDelete: Cascade)
   dailyMetrics DailyMetric[]
   orders       Order[]
+  customValues CustomMetricValue[]
 
   @@index([userId])
   @@index([brandId])
@@ -396,4 +402,55 @@ model ReportSnapshot {
 
   @@unique([brandId, month])
   @@map("report_snapshots")
+}
+
+/// Markaya özel metriğin kampanya-gün değeri (örn. potansiyel müşteri, mesaj). Toplanarak raporlanır.
+model CustomMetricValue {
+  id         String   @id @default(uuid())
+  brandId    String   @map("brand_id")
+  uploadId   String   @map("upload_id")
+  campaignId String?  @map("campaign_id")
+  date       DateTime @db.Date
+  platform   String
+  key        String
+  value      Float
+
+  brand  Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  upload UploadLog @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, key, date])
+  @@index([uploadId])
+  @@map("custom_metric_values")
+}
+
+/// Markanın metrik tanımı: yüklenen özel sütun ("custom") veya diğer metriklerden formül ("formula").
+model MetricDefinition {
+  id        String   @id @default(uuid())
+  brandId   String   @map("brand_id")
+  key       String
+  label     String
+  kind      String // custom | formula
+  formula   String?
+  format    String   @default("number") // number | money | percent | ratio
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, key])
+  @@map("metric_definitions")
+}
+
+/// Aynı başlıklara sahip dosyalar için hatırlanan sütun eşlemesi.
+model ImportTemplate {
+  id          String   @id @default(uuid())
+  brandId     String   @map("brand_id")
+  signature   String
+  mappingJson String   @map("mapping_json")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, signature])
+  @@map("import_templates")
 }

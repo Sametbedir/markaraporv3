@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import ColumnMapper, { type PreviewColumn, type UploadPreview, mappingProblems } from './column-mapper';
 
 /* ─── Types ─── */
 interface ImportReport {
@@ -203,6 +204,37 @@ export default function UploadClient() {
       return;
     }
     setFile(picked);
+    loadPreview(picked);
+  };
+
+  /* ── Önizleme: dosya kaydedilmeden sütunlar ve önerilen eşleme ── */
+  const [preview, setPreview] = useState<UploadPreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const loadPreview = async (picked: File, sheet?: string) => {
+    setPreviewing(true);
+    setPreviewError(null);
+    if (!sheet) setPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', picked);
+      if (sheet) fd.append('sheet', sheet);
+      const res = await fetch('/api/upload/preview', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setPreview(data as UploadPreview);
+      else setPreviewError(data?.error ?? 'Dosya önizlenemedi.');
+    } catch {
+      setPreviewError('Bağlantı hatası: dosya önizlenemedi.');
+    }
+    setPreviewing(false);
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setPreview(null);
+    setPreviewError(null);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const handleFileUpload = async () => {
@@ -212,6 +244,14 @@ export default function UploadClient() {
     try {
       const fd = new FormData();
       fd.append('file', file);
+      if (preview) {
+        fd.append('mapping', JSON.stringify({
+          headerRowIndex: preview.headerRowIndex,
+          sheetName: preview.sheet_name,
+          signature: preview.signature,
+          columns: preview.columns.map((c: PreviewColumn) => ({ index: c.index, key: c.key, role: c.role })),
+        }));
+      }
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data: any = await res.json().catch(() => ({}));
 
@@ -225,8 +265,7 @@ export default function UploadClient() {
           platforms: data.platforms,
           report: data.report,
         });
-        setFile(null);
-        if (fileRef.current) fileRef.current.value = '';
+        clearFile();
         await fetchLogs();
         // Otomatik yönlendirme yok: kullanıcı önce eşleme ve uyarıları görmeli.
       } else {
@@ -603,7 +642,7 @@ export default function UploadClient() {
                   </div>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setFile(null); setFileResult(null); if (fileRef.current) fileRef.current.value = ''; }}
+                    onClick={(e) => { e.stopPropagation(); clearFile(); setFileResult(null); }}
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors mt-1"
                   >
                     <X className="w-3 h-3" /> Dosyayı Kaldır
@@ -626,12 +665,30 @@ export default function UploadClient() {
               )}
             </div>
 
+            {file && (previewing || previewError || preview) && (
+              <div className="mt-5">
+                {previewing && !preview && <p className="text-sm text-muted-foreground">Dosya okunuyor…</p>}
+                {previewError && (
+                  <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                    {previewError} Yine de &quot;Yükle&quot; ile otomatik okumayı deneyebilirsiniz.
+                  </p>
+                )}
+                {preview && (
+                  <ColumnMapper
+                    preview={preview}
+                    onChange={(columns) => setPreview({ ...preview, columns })}
+                    onSheetChange={(sheet) => loadPreview(file, sheet)}
+                  />
+                )}
+              </div>
+            )}
+
             {file && (
               <div className="mt-5 flex justify-end">
                 <button
                   type="button"
                   onClick={handleFileUpload}
-                  disabled={uploading}
+                  disabled={uploading || previewing || (!!preview && mappingProblems(preview.columns).length > 0)}
                   className="px-6 py-2.5 rounded-lg bg-[#0d9488] hover:bg-[#0f766e] text-white text-sm font-semibold shadow-sm transition disabled:opacity-60 flex items-center gap-2"
                 >
                   {uploading ? (
