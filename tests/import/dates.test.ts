@@ -21,7 +21,12 @@ describe('parseDate', () => {
     expect(parseDate('31.02.2026')).toBeNull();
     expect(parseDate('')).toBeNull();
     expect(parseDate('Toplam')).toBeNull();
-    expect(parseDate(45000)).toBeNull();
+  });
+
+  it('Excel seri numarasını tarihe çevirir, makul olmayan sayıları reddeder', () => {
+    expect(parseDate(46277)).toBe('2026-09-12');
+    expect(parseDate(150)).toBeNull();
+    expect(parseDate(46277.5)).toBeNull();
   });
 
   it('Excel Date nesnesinde yerel günü kullanır', () => {

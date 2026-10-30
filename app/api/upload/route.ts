@@ -5,53 +5,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { addDemoUpload, demoUploads } from '@/lib/demo-data';
 import { prisma } from '@/lib/prisma';
-import { AdReportResult, AdRow, parseAdReport } from '@/lib/import/ad-report';
-import { parseDelimited } from '@/lib/import/csv';
+import { AdRow } from '@/lib/import/ad-report';
+import { ParsedFile, SUPPORTED_EXTENSIONS, parseUploadedFile } from '@/lib/import/file';
 import { FIELD_LABELS } from '@/lib/import/headers';
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const SUPPORTED = ['csv', 'tsv', 'xlsx', 'xls'];
 const DEFAULT_PLATFORM = 'Genel';
 const DEFAULT_CAMPAIGN = 'Yüklenen Veri';
 
 /* ═══════════════════════════════════════════════════════════════
    DOSYA → TABLO
 ═══════════════════════════════════════════════════════════════ */
-
-/** Türkçe Excel'in kaydettiği CSV'ler çoğunlukla Windows-1254'tür; UTF-8 değilse ona düşülür. */
-function decodeText(buffer: ArrayBuffer): string {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-  } catch {
-    return new TextDecoder('windows-1254').decode(buffer);
-  }
-}
-
-type ParsedFile = { report: AdReportResult; sheetName: string | null; extraWarnings: string[] };
-
-async function parseFile(buffer: ArrayBuffer, ext: string): Promise<ParsedFile> {
-  if (ext === 'csv' || ext === 'tsv') {
-    return { report: parseAdReport(parseDelimited(decodeText(buffer))), sheetName: null, extraWarnings: [] };
-  }
-
-  const XLSX = await import('xlsx');
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-  const parsedSheets = workbook.SheetNames.map((name) => {
-    const table = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], { header: 1, raw: true, defval: null });
-    return { name, report: parseAdReport(table) };
-  });
-
-  const usable = parsedSheets.filter((s) => s.report.ok);
-  if (!usable.length) {
-    return { report: parsedSheets[0]?.report ?? parseAdReport([]), sheetName: parsedSheets[0]?.name ?? null, extraWarnings: [] };
-  }
-  // Birden çok sayfayı toplamak (örn. bir özet sayfası varsa) veriyi iki kez sayabilir; yalnızca ilk uygun sayfa okunur.
-  const extraWarnings =
-    usable.length > 1
-      ? [`Dosyada okunabilir ${usable.length} sayfa var; yalnızca "${usable[0].name}" sayfası alındı. Diğer sayfaları ayrı dosya olarak yükleyin.`]
-      : [];
-  return { report: usable[0].report, sheetName: usable[0].name, extraWarnings };
-}
 
 /* ═══════════════════════════════════════════════════════════════
    KULLANICIYA GÖSTERİLECEK RAPOR
@@ -182,7 +146,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Dosya bulunamadı. Lütfen bir dosya seçin.' }, { status: 400 });
 
     const ext = file.name.toLowerCase().split('.').pop() ?? '';
-    if (!SUPPORTED.includes(ext))
+    if (!(SUPPORTED_EXTENSIONS as readonly string[]).includes(ext))
       return NextResponse.json(
         { error: `".${ext}" formatı desteklenmiyor. Lütfen CSV, TSV, XLSX veya XLS dosyası yükleyin.` },
         { status: 400 }
@@ -201,10 +165,10 @@ export async function POST(req: NextRequest) {
 
     let parsed: ParsedFile;
     try {
-      parsed = await parseFile(buffer, ext);
+      parsed = await parseUploadedFile(buffer, ext);
     } catch (ex: any) {
       return NextResponse.json(
-        { error: `Dosya okunamadı: ${ex?.message ?? 'Format hatası'}. Dosyanın bozulmadığından emin olun.` },
+        { error: `Dosya okunamadı: ${ex?.message ?? 'Format hatası'}.` },
         { status: 400 }
       );
     }

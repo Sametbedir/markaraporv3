@@ -6,6 +6,7 @@
  * - "05/10/2026" gibi belirsiz tarihler Türkiye alışkanlığına göre GÜN/AY okunur;
  *   ilk sayı 12'den büyükse zaten gündür, ikinci sayı 12'den büyükse AY/GÜN okunur.
  * - 31.02.2026 gibi takvimde olmayan tarihler reddedilir.
+ * - Biçimsiz Excel hücrelerindeki seri numaraları (örn. 46278) tarihe çevrilir.
  */
 
 const MONTHS: Record<string, number> = {
@@ -37,6 +38,12 @@ export function parseDate(raw: unknown): string | null {
   if (raw instanceof Date) {
     if (Number.isNaN(raw.getTime())) return null;
     return toIso(raw.getFullYear(), raw.getMonth() + 1, raw.getDate());
+  }
+  // Tarih biçimi verilmemiş Excel hücresi seri numarası olarak gelir (1 = 1900-01-01, 46000 ≈ 2025)
+  if (typeof raw === 'number') {
+    if (!Number.isInteger(raw) || raw < 36526 || raw > 73050) return null; // 2000–2099 dışı
+    const d = new Date(Date.UTC(1899, 11, 30) + raw * 86400000);
+    return toIso(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
   }
   if (typeof raw !== 'string') return null;
   const v = raw.trim();
