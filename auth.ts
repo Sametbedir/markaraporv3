@@ -10,7 +10,9 @@ const DEMO_ADMIN = {
   isAdmin: true,
   companyName: 'MarkaRapor Admin',
 } as const;
-const demoAdminEnabled = process.env.NODE_ENV !== 'production' && process.env.DEMO_ADMIN_ENABLED !== 'false';
+// Demo admin yalnizca acikca izin verilirse (DEMO_ADMIN_ENABLED="true") ve production disinda calisir.
+// Veritabanina yazilmaz; demo verileri bellekte tutulur (lib/demo-data.ts).
+const demoAdminEnabled = process.env.NODE_ENV !== 'production' && process.env.DEMO_ADMIN_ENABLED === 'true';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -33,18 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const isAdminLogin = email === 'admin@markarapor.com' && password === 'Admin123';
 
         if (isAdminLogin && demoAdminEnabled) {
-          try {
-            const hashedPassword = await bcrypt.hash(password, 12);
-            const user = await prisma.user.upsert({
-              where: { email },
-              update: { name: 'Admin', hashedPassword, isAdmin: true, companyName: 'MarkaRapor Admin', isActive: true },
-              create: { email, name: 'Admin', hashedPassword, isAdmin: true, companyName: 'MarkaRapor Admin', isActive: true },
-            });
-            return { id: user.id, email: user.email, name: user.name, isAdmin: true, companyName: user.companyName } as any;
-          } catch (error) {
-            console.error('Admin DB setup failed, using demo mode:', error);
-            return DEMO_ADMIN as any;
-          }
+          return DEMO_ADMIN as any;
         }
 
         let user: any = null;

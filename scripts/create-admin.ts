@@ -4,8 +4,11 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@markarapor.com';
-  const password = 'Admin123';
+  const email = process.env.ADMIN_EMAIL?.trim();
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password || password.length < 12) {
+    throw new Error('ADMIN_EMAIL ve en az 12 karakterli ADMIN_PASSWORD ortam degiskenlerini .env dosyasina yaz.');
+  }
   const normalizedEmail = email.toLowerCase().trim();
   const hashedPassword = await bcrypt.hash(password, 12);
 

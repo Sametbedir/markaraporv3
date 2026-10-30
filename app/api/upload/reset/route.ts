@@ -20,17 +20,20 @@ async function handleReset() {
 
   const userId = session.user.id;
 
+  // Yalnızca dosya yüklemesi ve manuel girişle gelen veriler silinir; iKas/Ticimax gibi API kaynakları korunur.
+  const fileSources = { in: ['upload', 'manual'] };
+
   try {
-    await prisma.dailyMetric.deleteMany({ where: { userId } });
-    await prisma.order.deleteMany({ where: { userId } });
-    await prisma.campaign.deleteMany({ where: { userId, source: 'upload' } });
-    try {
-      await (prisma as any).uploadLog.deleteMany({ where: { userId } });
-    } catch {}
+    await prisma.$transaction([
+      prisma.dailyMetric.deleteMany({ where: { userId, source: fileSources } }),
+      prisma.order.deleteMany({ where: { userId, source: fileSources } }),
+      prisma.campaign.deleteMany({ where: { userId, source: fileSources, dailyMetrics: { none: {} } } }),
+      prisma.uploadLog.deleteMany({ where: { userId } }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      message: 'Tüm yüklenmiş reklam, satış ve sipariş verileri başarıyla sıfırlandı.',
+      message: 'Dosyayla ve manuel olarak yüklenen tüm veriler sıfırlandı. API entegrasyonlarından gelen siparişler korundu.',
     });
   } catch (error: any) {
     console.error('Veri sıfırlanırken hata:', error);

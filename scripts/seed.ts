@@ -5,12 +5,15 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Admin account for app access
-  const adminEmail = 'admin@markarapor.com';
-  const adminPassword = 'Admin123';
+  const adminEmail = process.env.ADMIN_EMAIL?.trim();
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword || adminPassword.length < 12) {
+    throw new Error('ADMIN_EMAIL ve en az 12 karakterli ADMIN_PASSWORD ortam degiskenlerini .env dosyasina yaz.');
+  }
   const hashedPassword = await bcrypt.hash(adminPassword, 12);
 
   const user = await prisma.user.upsert({
-    where: { email: adminEmail },
+    where: { email: adminEmail.toLowerCase() },
     update: {
       name: 'Admin',
       hashedPassword,
@@ -19,7 +22,7 @@ async function main() {
       isActive: true,
     },
     create: {
-      email: adminEmail,
+      email: adminEmail.toLowerCase(),
       name: 'Admin',
       hashedPassword,
       companyName: 'MarkaRapor Admin',

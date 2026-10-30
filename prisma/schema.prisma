@@ -95,28 +95,35 @@ model DailyMetric {
   date        DateTime @db.Date
   platform    String
 
-  impressions Int     @default(0)
-  clicks      Int     @default(0)
-  spend       Float   @default(0)
-  conversions Int     @default(0)
-  revenue     Float   @default(0)
+  // Boş (null) = dosyada bu veri yoktu. 0 ile karıştırılmaz.
+  impressions Int?
+  clicks      Int?
+  spend       Float?
+  // Platformun bildirdiği satın alma sayısı (kesirli olabilir); mağaza siparişi değildir.
+  conversions Float?
+  // Platformun bildirdiği dönüşüm değeri; gerçek mağaza cirosu değildir.
+  revenue     Float?
   ctr         Float   @default(0)
   cpc         Float   @default(0)
   cpm         Float   @default(0)
   roas        Float   @default(0)
   frequency   Float   @default(0)
-  reach       Int     @default(0)
+  reach       Int?
+  currency    String?
 
   source          String @default("api")
   dataSourceLabel String @default("API'den") @map("data_source_label")
+  uploadId        String? @map("upload_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  user     User      @relation(fields: [userId], references: [id])
-  campaign Campaign? @relation(fields: [campaignId], references: [id])
+  user     User       @relation(fields: [userId], references: [id])
+  campaign Campaign?  @relation(fields: [campaignId], references: [id])
+  upload   UploadLog? @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
   @@index([userId])
   @@index([campaignId])
+  @@index([uploadId])
   @@map("daily_metrics")
 }
 
@@ -146,11 +153,15 @@ model Order {
 
   notes String?
 
-  user User @relation(fields: [userId], references: [id])
+  uploadId String? @map("upload_id")
+
+  user   User       @relation(fields: [userId], references: [id])
+  upload UploadLog? @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
   @@index([userId, orderDate])
   @@index([userId])
   @@index([externalId])
+  @@index([uploadId])
   @@map("orders")
 }
 
@@ -184,11 +195,18 @@ model UploadLog {
   platforms    String?  // JSON array string e.g. ["Meta Ads","Google Ads"]
   status       String   @default("success") // success | error
   errorMessage String?  @map("error_message")
+  kind         String   @default("ad_report") // ad_report | manual | orders
+  fileHash     String?  @map("file_hash") // aynı dosyanın tekrar yüklenmesini engellemek için SHA-256
+  currency     String?
+  reportJson   String?  @map("report_json") // eşleme, eksik alanlar ve uyarılar (JSON)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  dailyMetrics DailyMetric[]
+  orders       Order[]
 
   @@index([userId])
+  @@index([userId, fileHash])
   @@map("upload_logs")
 }
 

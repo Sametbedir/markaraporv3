@@ -17,7 +17,7 @@ const CANDIDATE_MODELS = [
   'gemini-3.5-flash',
 ];
 
-export async function eTicaretDanismaniAnalizi(dashboardVerileri: any) {
+export async function eTicaretDanismaniAnalizi(dashboardVerileri: any): Promise<string | null> {
   const sistemTalimati = `
     Sen 10 yılı aşkın e-ticaret ve performans pazarlama (Meta, Google Ads vb.) tecrübesine sahip kıdemli bir dijital pazarlama danışmanısın.
     Sana bir e-ticaret markasının panelinden alınan güncel performans verileri verilecek.
@@ -47,22 +47,6 @@ export async function eTicaretDanismaniAnalizi(dashboardVerileri: any) {
     }
   }
 
-  // Akıllı ve somut yedek danışman motoru (API 503 veya kotada iken devrede)
-  const ciro = dashboardVerileri?.toplamCiro || 1682731;
-  const harcama = dashboardVerileri?.toplamHarcama || 460138;
-  const kar = dashboardVerileri?.netKar || 1222592;
-  const roas = dashboardVerileri?.roas || 3.66;
-  const marj = dashboardVerileri?.karMarji || '72.66%';
-
-  return `### 🩺 Genel Sağlık Özeti
-- **Ciro ve Kârlılık Dengesi:** Toplam ${ciro.toLocaleString('tr-TR')} ₺ ciro ve %${marj} brüt kâr marjı ile güçlü bir performans sergilenmektedir.
-- **Pazarlama Verimliliği (ROAS):** ${roas}x ROAS oranı, harcanan ${harcama.toLocaleString('tr-TR')} ₺ bütçenin üzerinde sağlıklı bir geri dönüş üretmektedir. Net kâr ${kar.toLocaleString('tr-TR')} ₺ seviyesindedir.
-
-### 🚨 Acil Eylem Planı / Uyarılar
-- **Kanal Yoğunlaşma Riski:** Tek bir reklam kanalına aşırı bağımlı kalınmamalı, Meta ve Google Ads bütçeleri dönüşüm maliyetlerine göre dengelenmelidir.
-- **Sepet Terk Oranı:** Sepet adımında taksit ve aynı gün kargo rozetlerini öne çıkararak dönüşüm kayıplarını minimuma indirin.
-
-### 🚀 Büyüme Tavsiyeleri
-- **Hero Ürün Bütçe Artırımı:** En yüksek ROAS getiren ilk 3 ürün grubunda günlük reklam bütçesini kademeli olarak %20 artırarak ölçekleyin.
-- **Yeniden Hedefleme (Retargeting):** Son 14 günde sepete ekleyip almayan kitleye yönelik özel DABA dinamik katalog reklamlarını aktif tutun.`;
+  // AI yanıt vermezse uydurma rakam veya genel tavsiye üretmiyoruz; çağıran taraf kullanıcıya durumu bildirir.
+  return null;
 }

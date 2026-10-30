@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { storeOrderWhere } from '@/lib/store-orders';
 import { demoMetricsInRange } from '@/lib/demo-data';
 
 export async function GET(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     const totalClicks = metrics.reduce((sum, metric) => sum + metric.clicks, 0);
     const totalConversions = metrics.reduce((sum, metric) => sum + metric.conversions, 0);
     return NextResponse.json({
-      total_spend: totalSpend, total_revenue: totalRevenue, total_orders: totalOrders,
+      total_spend: totalSpend, total_revenue: totalRevenue, total_orders: totalOrders, has_store_orders: totalOrders > 0,
       total_impressions: totalImpressions, total_clicks: totalClicks, total_conversions: totalConversions,
       avg_roas: totalSpend ? totalRevenue / totalSpend : 0,
       avg_ctr: totalImpressions ? (totalClicks / totalImpressions) * 100 : 0,
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
   });
 
   const orderAgg = await prisma.order.aggregate({
-    where: { userId, orderDate: { gte: start, lte: end } },
+    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
     _sum: { totalPrice: true },
   });
@@ -90,6 +91,8 @@ export async function GET(req: NextRequest) {
     total_spend: Math.round(totalSpend * 100) / 100,
     total_revenue: Math.round(totalRevenue * 100) / 100,
     total_orders: totalOrders,
+    // false ise mağaza siparişi verisi yok: kart 0 değil "—" gösterir
+    has_store_orders: totalOrders > 0,
     total_impressions: totalImpressions,
     total_clicks: totalClicks,
     total_conversions: totalConversions,

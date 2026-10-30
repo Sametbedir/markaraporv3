@@ -7,9 +7,18 @@ import {
   Database, HelpCircle, ArrowRight
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { saveActiveReport } from '@/lib/client-data-store';
+import { toast } from 'sonner';
 
 /* ─── Types ─── */
+interface ImportReport {
+  sheetName: string | null;
+  currency: string | null;
+  mapping: { field: string; label: string; header: string }[];
+  unmappedColumns: string[];
+  missingFields: string[];
+  warnings: { code: string; message: string; rows: number[] }[];
+}
+
 interface UploadResult {
   success: boolean;
   message: string;
@@ -18,6 +27,7 @@ interface UploadResult {
   dateEnd?: string | null;
   platforms?: string[];
   error?: string;
+  report?: ImportReport;
 }
 
 interface UploadLog {
@@ -33,7 +43,7 @@ interface UploadLog {
   createdAt: string;
 }
 
-const ACCEPTED = '.csv,.xlsx,.xls,.tsv,.txt';
+const ACCEPTED = '.csv,.tsv,.xlsx,.xls';
 const MAX_MB = 10;
 
 function bytesToStr(b: number) {
@@ -57,24 +67,6 @@ function fmtRange(start: string | null, end: string | null) {
 function getPlatforms(log: UploadLog): string[] {
   if (!log.platforms) return [];
   try { return JSON.parse(log.platforms); } catch { return []; }
-}
-
-function parseTurkishNumber(val: string): number {
-  if (!val || !val.trim()) return 0;
-  let s = val.trim().replace(/[₺TL%\s]/g, '');
-  if (s.includes(',')) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else {
-    const parts = s.split('.');
-    if (parts.length >= 2) {
-      const lastPart = parts[parts.length - 1];
-      if (lastPart.length === 3 || parts.length > 2) {
-        s = parts.join('');
-      }
-    }
-  }
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
 }
 
 export default function UploadClient() {
@@ -146,15 +138,9 @@ export default function UploadClient() {
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    const spendNum = parseTurkishNumber(harcananTutar);
-    const revenueNum = parseTurkishNumber(ciro);
-    const imprNum = parseTurkishNumber(gosterim);
-    const clickNum = parseTurkishNumber(tiklama);
-    const newCustNum = parseTurkishNumber(yeniMusteri);
-    const retCustNum = parseTurkishNumber(geriDonenMusteri);
-
-    if (spendNum === 0 && revenueNum === 0 && clickNum === 0 && !kampanyaAdi.trim()) {
-      setErrorMessage('Lütfen en azından Harcanan Tutar, Ciro veya Kampanya Adı alanlarından birini doldurun.');
+    const metrikler = [harcananTutar, ciro, gosterim, tiklama, yeniMusteri, geriDonenMusteri];
+    if (metrikler.every((v) => !v.trim())) {
+      setErrorMessage('Lütfen en az bir metrik girin (harcama, ciro, gösterim, tıklama veya müşteri sayısı).');
       return;
     }
 
@@ -167,12 +153,13 @@ export default function UploadClient() {
       campaign: kampanyaAdi || `${veriKaynagi} Kampanyası`,
       adGroup: reklamSetiAdi,
       adName: reklamAdi,
-      spend: spendNum,
-      revenue: revenueNum,
-      impressions: imprNum,
-      clicks: clickNum,
-      newCustomers: newCustNum,
-      returningCustomers: retCustNum,
+      // Ham metin gönderilir; sunucu boş alanı 0 değil "eksik" olarak saklar.
+      spend: harcananTutar,
+      revenue: ciro,
+      impressions: gosterim,
+      clicks: tiklama,
+      newCustomers: yeniMusteri,
+      returningCustomers: geriDonenMusteri,
     };
 
     try {
@@ -186,9 +173,6 @@ export default function UploadClient() {
 
       if (res.ok && data.success) {
         setIsSuccess(true);
-        if (data.reportData) {
-          saveActiveReport(data.reportData);
-        }
         await fetchLogs();
 
         // 2 saniye sonra otomatik dashboard'a yönlendir
@@ -210,8 +194,8 @@ export default function UploadClient() {
     if (!picked) return;
     setFileResult(null);
     const ext = picked.name.toLowerCase().split('.').pop() ?? '';
-    if (!['csv', 'xlsx', 'xls', 'tsv', 'txt'].includes(ext)) {
-      setFileResult({ success: false, message: `".${ext}" formatı desteklenmiyor. CSV, XLSX veya XLS kullanın.` });
+    if (!['csv', 'tsv', 'xlsx', 'xls'].includes(ext)) {
+      setFileResult({ success: false, message: `".${ext}" formatı desteklenmiyor. CSV, TSV, XLSX veya XLS kullanın.` });
       return;
     }
     if (picked.size > MAX_MB * 1024 * 1024) {
@@ -239,16 +223,17 @@ export default function UploadClient() {
           dateStart: data.dateStart,
           dateEnd: data.dateEnd,
           platforms: data.platforms,
+          report: data.report,
         });
         setFile(null);
         if (fileRef.current) fileRef.current.value = '';
         await fetchLogs();
-
-        setTimeout(() => router.push('/dashboard'), 1500);
+        // Otomatik yönlendirme yok: kullanıcı önce eşleme ve uyarıları görmeli.
       } else {
         setFileResult({
           success: false,
           message: data?.error ?? 'Yükleme başarısız oldu.',
+          report: data?.report,
         });
       }
     } catch (e: any) {
@@ -262,10 +247,16 @@ export default function UploadClient() {
     setDeletingId(id);
     try {
       const res = await fetch(`/api/upload/logs?id=${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setLogs((prev) => prev.filter((l) => l.id !== id));
+        toast.success(data?.message ?? 'Yükleme silindi.');
+      } else {
+        toast.error(data?.error ?? 'Silme başarısız oldu.');
       }
-    } catch { /* ignore */ }
+    } catch {
+      toast.error('Sunucuya bağlanılamadı.');
+    }
     setDeletingId(null);
   };
 
@@ -662,6 +653,16 @@ export default function UploadClient() {
                   {fileResult.success ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
                   <p className="font-medium">{fileResult.message}</p>
                 </div>
+                {fileResult.report && <ImportReportDetails report={fileResult.report} />}
+                {fileResult.success && fileResult.dateStart && fileResult.dateEnd && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard?start_date=${fileResult.dateStart}&end_date=${fileResult.dateEnd}`)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold underline underline-offset-2"
+                  >
+                    Bu tarih aralığını dashboard'da aç <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -774,6 +775,51 @@ export default function UploadClient() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Yükleme raporu: hangi sütun neye eşlendi, ne eksik, hangi uyarılar var ─── */
+function ImportReportDetails({ report }: { report: ImportReport }) {
+  return (
+    <div className="mt-3 space-y-3 text-xs text-foreground">
+      {report.mapping.length > 0 && (
+        <div>
+          <p className="font-semibold mb-1">Eşlenen sütunlar{report.sheetName ? ` (sayfa: ${report.sheetName})` : ''}</p>
+          <ul className="grid sm:grid-cols-2 gap-x-4 gap-y-0.5">
+            {report.mapping.map((m) => (
+              <li key={m.field}>
+                <span className="text-muted-foreground">{m.label}:</span> {m.header}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-muted-foreground">Para birimi: {report.currency ?? 'belirtilmemiş'}</p>
+        </div>
+      )}
+      {report.missingFields.length > 0 && (
+        <p>
+          <span className="font-semibold">Dosyada olmayan alanlar (eksik kabul edildi, 0 yazılmadı):</span>{' '}
+          {report.missingFields.join(', ')}
+        </p>
+      )}
+      {report.unmappedColumns.length > 0 && (
+        <p className="text-muted-foreground">
+          <span className="font-semibold">Kullanılmayan sütunlar:</span> {report.unmappedColumns.join(', ')}
+        </p>
+      )}
+      {report.warnings.length > 0 && (
+        <div>
+          <p className="font-semibold mb-1">Uyarılar</p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            {report.warnings.map((w) => (
+              <li key={w.code}>
+                {w.message}
+                {w.rows.length > 0 && <span className="text-muted-foreground"> (satır: {w.rows.join(', ')})</span>}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

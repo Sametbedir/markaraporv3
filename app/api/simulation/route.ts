@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { storeOrderWhere } from '@/lib/store-orders';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   });
 
   const orders = await prisma.order.aggregate({
-    where: { userId, orderDate: { gte: start, lte: end } },
+    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
   });
 
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
   const avgRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
   const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
   const avgCpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
+
+  // Geçmiş veri yoksa projeksiyon üretmiyoruz; aksi halde 0 ROAS üzerinden yanıltıcı bir güven skoru çıkar.
+  if (dataPoints === 0) {
+    return NextResponse.json({ error: 'Seçilen dönemde geçmiş reklam verisi yok. Önce veri yükleyin.' }, { status: 400 });
+  }
 
   const budgetRatio = Number(new_budget) / Number(current_budget);
 

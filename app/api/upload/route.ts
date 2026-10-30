@@ -1,170 +1,168 @@
 export const dynamic = 'force-dynamic';
 
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { addDemoMetrics, findValue, normalizeHeader, numberFrom } from '@/lib/demo-data';
+import { addDemoMetrics } from '@/lib/demo-data';
 import { prisma } from '@/lib/prisma';
+import { AdReportResult, AdRow, parseAdReport } from '@/lib/import/ad-report';
+import { parseDelimited } from '@/lib/import/csv';
+import { FIELD_LABELS } from '@/lib/import/headers';
+
+const MAX_BYTES = 10 * 1024 * 1024;
+const SUPPORTED = ['csv', 'tsv', 'xlsx', 'xls'];
+const DEFAULT_PLATFORM = 'Genel';
+const DEFAULT_CAMPAIGN = 'Yüklenen Veri';
 
 /* ═══════════════════════════════════════════════════════════════
-   EXCEL PARSER  (xlsx package — dynamic import)
+   DOSYA → TABLO
 ═══════════════════════════════════════════════════════════════ */
-async function parseExcel(buffer: ArrayBuffer): Promise<Record<string, string>[][]> {
+
+/** Türkçe Excel'in kaydettiği CSV'ler çoğunlukla Windows-1254'tür; UTF-8 değilse ona düşülür. */
+function decodeText(buffer: ArrayBuffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder('windows-1254').decode(buffer);
+  }
+}
+
+type ParsedFile = { report: AdReportResult; sheetName: string | null; extraWarnings: string[] };
+
+async function parseFile(buffer: ArrayBuffer, ext: string): Promise<ParsedFile> {
+  if (ext === 'csv' || ext === 'tsv') {
+    return { report: parseAdReport(parseDelimited(decodeText(buffer))), sheetName: null, extraWarnings: [] };
+  }
+
   const XLSX = await import('xlsx');
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-  const results: Record<string, string>[][] = [];
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    const json: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, {
-      defval: '',
-      raw: false,
-      dateNF: 'DD.MM.YYYY',
-    });
-    if (!json.length) continue;
-    results.push(
-      json.map((row) =>
-        Object.fromEntries(Object.entries(row).map(([k, v]) => [k, String(v ?? '')]))
-      ) as Record<string, string>[]
-    );
+  const parsedSheets = workbook.SheetNames.map((name) => {
+    const table = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], { header: 1, raw: true, defval: null });
+    return { name, report: parseAdReport(table) };
+  });
+
+  const usable = parsedSheets.filter((s) => s.report.ok);
+  if (!usable.length) {
+    return { report: parsedSheets[0]?.report ?? parseAdReport([]), sheetName: parsedSheets[0]?.name ?? null, extraWarnings: [] };
   }
-  return results;
+  // Birden çok sayfayı toplamak (örn. bir özet sayfası varsa) veriyi iki kez sayabilir; yalnızca ilk uygun sayfa okunur.
+  const extraWarnings =
+    usable.length > 1
+      ? [`Dosyada okunabilir ${usable.length} sayfa var; yalnızca "${usable[0].name}" sayfası alındı. Diğer sayfaları ayrı dosya olarak yükleyin.`]
+      : [];
+  return { report: usable[0].report, sheetName: usable[0].name, extraWarnings };
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   CSV PARSER  (pure JS — BOM-safe, comma/semicolon/tab auto-detect)
+   KULLANICIYA GÖSTERİLECEK RAPOR
 ═══════════════════════════════════════════════════════════════ */
-function parseCsv(raw: string): string[][] {
-  const text = raw.replace(/^\uFEFF/, ''); // strip BOM
-  const firstLine = text.split('\n')[0] ?? '';
-  const sep =
-    (firstLine.split(';').length - 1) >= (firstLine.split(',').length - 1)
-      ? ';'
-      : (firstLine.split('\t').length - 1) >= (firstLine.split(',').length - 1)
-      ? '\t'
-      : ',';
 
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let value = '';
-  let quoted = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    const n = text[i + 1];
-    if (c === '"' && quoted && n === '"') { value += '"'; i++; }
-    else if (c === '"') { quoted = !quoted; }
-    else if (c === sep && !quoted) { row.push(value.trim()); value = ''; }
-    else if ((c === '\n' || c === '\r') && !quoted) {
-      if (c === '\r' && n === '\n') i++;
-      row.push(value.trim());
-      if (row.some(Boolean)) rows.push(row);
-      row = []; value = '';
-    } else { value += c; }
-  }
-  row.push(value.trim());
-  if (row.some(Boolean)) rows.push(row);
-  return rows;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   DATE NORMALIZATION
-═══════════════════════════════════════════════════════════════ */
-function parseDate(raw: string): string | null {
-  const v = raw.trim();
-  if (!v) return null;
-  // DD.MM.YYYY  DD/MM/YYYY  DD-MM-YYYY
-  const tr = v.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-  if (tr) return `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}`;
-  // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-  // MM/DD/YYYY
-  const us = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   COLUMN ALIASES  (TR + EN + platform variants)
-═══════════════════════════════════════════════════════════════ */
-const A = {
-  date:     ['tarih','date','gun','gün','day','report_date','donem','dönem','raportar'],
-  platform: ['platform','kanal','channel','network','kaynak','source','medya'],
-  campaign: ['kampanya','campaign','campaignname','ad_set','adset','reklam','reklamadi','ad_name'],
-  spend:    ['harcama','spend','cost','maliyet','amount_spent','toplam_harcama','butce','bütçe',
-             'harcanan','adspend','ad_spend','cost_micros','reklam_harcamasi','reklam_harcaması',
-             'maliyet_tl','toplam_maliyet'],
-  revenue:  ['gelir','ciro','revenue','sales','satis','satış','total_revenue','conversion_value',
-             'purchase_value','total_sales','toplam_gelir','toplam_ciro','satis_geliri',
-             'satış_geliri','hasilat','total_value'],
-  orders:   ['siparis','sipariş','orders','ordercount','order_count','siparis_sayisi',
-             'sipariş_sayısı','adet','conversions','purchases','satis_adedi','satış_adedi',
-             'result','results'],
-  impressions:['gosterim','gösterim','impressions','impr','reach','views','goruntuleme'],
-  clicks:   ['tiklama','tıklama','clicks','click','link_clicks','website_clicks','tiklama_sayisi'],
-  conversions:['donusum','dönüşüm','conversions','conv','sepete_ekle'],
-  aov:      ['aov','ortalama_sepet','sepet_ortalaması','avg_order','average_order_value','ort_siparis'],
-  cpc:      ['cpc','tiklama_maliyeti','tıklama_maliyeti','cost_per_click','tba_maliyet'],
-  ctr:      ['ctr','tiklama_orani','tıklama_oranı','click_through_rate'],
-  cac:      ['cac','musteri_edinme','müşteri_edinme','cost_per_acquisition','cpa','edinme_maliyeti'],
-  followers:['takipci','takipçi','followers','follower_count'],
-  basket:   ['sepet','basket','cart_value','toplam_sepet','total_cart'],
-};
-
-type ParsedRow = {
-  date: string;
-  platform: string;
-  campaign: string;
-  spend: number; revenue: number; orders: number;
-  impressions: number; clicks: number; conversions: number;
-  aov?: number; cpc?: number; ctr?: number; cac?: number;
-  followers?: number; basket?: number;
-};
-
-function rowToMetric(row: Record<string, string>): ParsedRow | null {
-  const date = parseDate(findValue(row, A.date));
-  if (!date) return null; // skip rows without a parsable date
-
+function describeReport(parsed: ParsedFile) {
+  const { report } = parsed;
   return {
-    date,
-    platform:    findValue(row, A.platform) || 'Genel',
-    campaign:    findValue(row, A.campaign) || 'Yüklenen Veri',
-    spend:       numberFrom(findValue(row, A.spend)),
-    revenue:     numberFrom(findValue(row, A.revenue)),
-    orders:      numberFrom(findValue(row, A.orders)),
-    impressions: numberFrom(findValue(row, A.impressions)),
-    clicks:      numberFrom(findValue(row, A.clicks)),
-    conversions: numberFrom(findValue(row, A.conversions)),
-    aov:         numberFrom(findValue(row, A.aov)) || undefined,
-    cpc:         numberFrom(findValue(row, A.cpc)) || undefined,
-    ctr:         numberFrom(findValue(row, A.ctr)) || undefined,
-    cac:         numberFrom(findValue(row, A.cac)) || undefined,
-    followers:   numberFrom(findValue(row, A.followers)) || undefined,
-    basket:      numberFrom(findValue(row, A.basket)) || undefined,
+    sheetName: parsed.sheetName,
+    headerRow: report.headerRowNumber,
+    currency: report.currency,
+    decimalStyle: report.decimalStyle,
+    mapping: Object.entries(report.mapping).map(([field, header]) => ({
+      field,
+      label: FIELD_LABELS[field as keyof typeof FIELD_LABELS],
+      header,
+    })),
+    unmappedColumns: report.unmappedColumns,
+    missingFields: report.missingFields.map((f) => FIELD_LABELS[f]),
+    warnings: [
+      ...parsed.extraWarnings.map((message) => ({ code: 'sheets', message, rows: [] as number[] })),
+      ...report.warnings.map((w) => ({ ...w, rows: w.rows.slice(0, 20) })),
+    ],
   };
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   DETECT date range & platforms from parsed rows
+   KAYIT
 ═══════════════════════════════════════════════════════════════ */
-function detectMeta(rows: ParsedRow[]) {
-  const dates = rows.map((r) => r.date).filter(Boolean).sort();
-  const platforms = [...new Set(rows.map((r) => r.platform).filter(Boolean))];
-  return {
-    dateStart: dates[0] ?? null,
-    dateEnd:   dates[dates.length - 1] ?? null,
-    platforms,
-  };
-}
 
-/* ═══════════════════════════════════════════════════════════════
-   DESCRIBE PARSE FAILURE (human-readable Turkish)
-═══════════════════════════════════════════════════════════════ */
-function buildParseError(headers: string[]): string {
-  const detected = headers.slice(0, 8).join(', ');
-  return (
-    `Sütunlar tanınamadı. Tespit edilen sütun adları: [${detected}]. ` +
-    `Desteklenen sütun adları: tarih/date, harcama/spend/cost, ciro/gelir/revenue, ` +
-    `sipariş/orders, gösterim/impressions, tıklama/clicks, platform/kanal, kampanya/campaign.`
+const ratio = (a: number | null, b: number | null, factor = 1) => (a !== null && b ? (a / b) * factor : undefined);
+
+async function persist(userId: string, fileName: string, ext: string, fileHash: string, parsed: ParsedFile) {
+  const { report } = parsed;
+  const label = `Yüklenen ${ext.toUpperCase()}`;
+  const platforms = [...new Set(report.rows.map((r) => r.platform ?? DEFAULT_PLATFORM))];
+
+  return prisma.$transaction(
+    async (tx) => {
+      const log = await tx.uploadLog.create({
+        data: {
+          userId,
+          fileName,
+          fileType: ext.toUpperCase(),
+          kind: 'ad_report',
+          fileHash,
+          currency: report.currency,
+          importedRows: report.rows.length,
+          dateStart: report.dateStart ? new Date(`${report.dateStart}T00:00:00.000Z`) : null,
+          dateEnd: report.dateEnd ? new Date(`${report.dateEnd}T00:00:00.000Z`) : null,
+          platforms: JSON.stringify(platforms),
+          reportJson: JSON.stringify(describeReport(parsed)),
+          status: 'success',
+        },
+      });
+
+      // Kampanyaları (platform + ad) bul veya oluştur
+      const campaignKey = (r: AdRow) => JSON.stringify([r.platform ?? DEFAULT_PLATFORM, r.campaign ?? DEFAULT_CAMPAIGN]);
+      const campaignIds = new Map<string, string>();
+      for (const key of new Set(report.rows.map(campaignKey))) {
+        const [platform, name] = JSON.parse(key) as [string, string];
+        const campaign =
+          (await tx.campaign.findFirst({ where: { userId, name, platform } })) ??
+          (await tx.campaign.create({ data: { userId, name, platform, source: 'upload', dataSourceLabel: label } }));
+        campaignIds.set(key, campaign.id);
+      }
+
+      // Daha önce dosyayla yüklenmiş aynı kampanya-gün satırlarını yenileriyle değiştir (son yükleme geçerlidir)
+      const datesByCampaign = new Map<string, Date[]>();
+      for (const r of report.rows) {
+        const id = campaignIds.get(campaignKey(r))!;
+        const list = datesByCampaign.get(id) ?? [];
+        list.push(new Date(`${r.date}T00:00:00.000Z`));
+        datesByCampaign.set(id, list);
+      }
+      let replacedRows = 0;
+      for (const [campaignId, dates] of datesByCampaign) {
+        const deleted = await tx.dailyMetric.deleteMany({
+          where: { userId, campaignId, source: 'upload', date: { in: dates } },
+        });
+        replacedRows += deleted.count;
+      }
+
+      const data = report.rows.map((r) => ({
+        userId,
+        campaignId: campaignIds.get(campaignKey(r))!,
+        uploadId: log.id,
+        date: new Date(`${r.date}T00:00:00.000Z`),
+        platform: r.platform ?? DEFAULT_PLATFORM,
+        spend: r.spend,
+        revenue: r.conversionValue,
+        conversions: r.conversions,
+        impressions: r.impressions === null ? null : Math.round(r.impressions),
+        clicks: r.clicks === null ? null : Math.round(r.clicks),
+        reach: r.reach === null ? null : Math.round(r.reach),
+        currency: report.currency,
+        // Türetilmiş oranlar yalnızca iki girdi de varsa yazılır
+        ctr: ratio(r.clicks, r.impressions, 100),
+        cpc: ratio(r.spend, r.clicks),
+        cpm: ratio(r.spend, r.impressions, 1000),
+        roas: ratio(r.conversionValue, r.spend),
+        source: 'upload',
+        dataSourceLabel: label,
+      }));
+      for (let i = 0; i < data.length; i += 1000) {
+        await tx.dailyMetric.createMany({ data: data.slice(i, i + 1000) });
+      }
+
+      return { replacedRows, platforms };
+    },
+    { maxWait: 10_000, timeout: 60_000 }
   );
 }
 
@@ -184,16 +182,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Dosya bulunamadı. Lütfen bir dosya seçin.' }, { status: 400 });
 
     const ext = file.name.toLowerCase().split('.').pop() ?? '';
-    const isExcel = ext === 'xlsx' || ext === 'xls';
-    const isCsv   = ext === 'csv';
-
-    if (!isExcel && !isCsv)
+    if (!SUPPORTED.includes(ext))
       return NextResponse.json(
-        { error: `".${ext}" formatı desteklenmiyor. Lütfen CSV, XLSX veya XLS dosyası yükleyin.` },
+        { error: `".${ext}" formatı desteklenmiyor. Lütfen CSV, TSV, XLSX veya XLS dosyası yükleyin.` },
         { status: 400 }
       );
 
-    if (file.size > 10 * 1024 * 1024)
+    if (file.size > MAX_BYTES)
       return NextResponse.json(
         { error: `Dosya boyutu ${(file.size / 1024 / 1024).toFixed(1)} MB — 10 MB sınırını aşıyor.` },
         { status: 400 }
@@ -202,148 +197,78 @@ export async function POST(req: NextRequest) {
     if (file.size === 0)
       return NextResponse.json({ error: 'Dosya boş görünüyor.' }, { status: 400 });
 
-    /* ── Parse ── */
-    let parsed: ParsedRow[] = [];
-    let rawHeaders: string[] = [];
+    const buffer = await file.arrayBuffer();
 
-    if (isExcel) {
-      let sheets: Record<string, string>[][];
-      try {
-        sheets = await parseExcel(await file.arrayBuffer());
-      } catch (ex: any) {
-        return NextResponse.json(
-          { error: `Excel dosyası okunamadı: ${ex?.message ?? 'Format hatası'}. Dosyanın bozulmadığından emin olun.` },
-          { status: 400 }
-        );
-      }
-      if (!sheets.length)
-        return NextResponse.json({ error: 'Excel dosyasında hiçbir çalışma sayfasında veri bulunamadı.' }, { status: 400 });
-
-      for (const sheetRows of sheets) {
-        if (!sheetRows.length) continue;
-        rawHeaders = Object.keys(sheetRows[0]);
-        const mapped = sheetRows
-          .map((row) => {
-            const norm: Record<string, string> = {};
-            for (const [k, v] of Object.entries(row)) norm[normalizeHeader(k)] = v;
-            return rowToMetric(norm);
-          })
-          .filter((r): r is ParsedRow => r !== null && !!(r.spend || r.revenue || r.orders || r.impressions || r.clicks));
-        parsed.push(...mapped);
-      }
-    }
-
-    if (isCsv) {
-      let text: string;
-      try {
-        text = await file.text();
-      } catch {
-        return NextResponse.json(
-          { error: 'CSV dosyası okunamadı. Dosyanın UTF-8 veya Windows-1254 encoding ile kaydedildiğinden emin olun.' },
-          { status: 400 }
-        );
-      }
-      const rows = parseCsv(text);
-      if (rows.length < 2)
-        return NextResponse.json(
-          { error: 'CSV çok kısa: en az 1 başlık satırı + 1 veri satırı olmalı.' },
-          { status: 400 }
-        );
-      const headers = rows[0].map(normalizeHeader);
-      rawHeaders = rows[0];
-      const data = rows.slice(1).map((values) => {
-        const raw: Record<string, string> = Object.fromEntries(headers.map((h, i) => [h, values[i] ?? '']));
-        return rowToMetric(raw);
-      });
-      parsed = data.filter((r): r is ParsedRow => r !== null && !!(r.spend || r.revenue || r.orders || r.impressions || r.clicks));
-    }
-
-    if (!parsed.length)
+    let parsed: ParsedFile;
+    try {
+      parsed = await parseFile(buffer, ext);
+    } catch (ex: any) {
       return NextResponse.json(
-        { error: buildParseError(rawHeaders) },
+        { error: `Dosya okunamadı: ${ex?.message ?? 'Format hatası'}. Dosyanın bozulmadığından emin olun.` },
+        { status: 400 }
+      );
+    }
+
+    if (!parsed.report.ok)
+      return NextResponse.json(
+        { error: parsed.report.errors.join(' '), report: describeReport(parsed) },
         { status: 400 }
       );
 
-    /* ── Date & platform meta ── */
-    const meta = detectMeta(parsed);
-
-    /* ── Persist ── */
+    const { report } = parsed;
     const userId = session.user.id;
     const isDemo = userId === 'admin-demo-user';
+    let replacedRows = 0;
+    let platforms = [...new Set(report.rows.map((r) => r.platform ?? DEFAULT_PLATFORM))];
 
     if (isDemo) {
-      addDemoMetrics(parsed);
+      // Demo modu bellekte çalışır; eksik değerler yalnızca burada 0 olarak tutulur ve mağaza siparişi üretilmez.
+      addDemoMetrics(
+        report.rows.map((r) => ({
+          date: r.date,
+          platform: r.platform ?? DEFAULT_PLATFORM,
+          campaign: r.campaign ?? DEFAULT_CAMPAIGN,
+          spend: r.spend ?? 0,
+          revenue: r.conversionValue ?? 0,
+          orders: 0,
+          impressions: r.impressions ?? 0,
+          clicks: r.clicks ?? 0,
+          conversions: r.conversions ?? 0,
+        }))
+      );
     } else {
-      for (const metric of parsed) {
-        const label = `Yüklenen ${ext.toUpperCase()}`;
-        const campaign =
-          (await prisma.campaign.findFirst({
-            where: { userId, name: metric.campaign, platform: metric.platform },
-          })) ??
-          (await prisma.campaign.create({
-            data: { userId, name: metric.campaign, platform: metric.platform, source: 'upload', dataSourceLabel: label },
-          }));
-
-        const impliedRevenue = metric.aov && metric.orders ? metric.aov * metric.orders : metric.revenue;
-        const impliedCpc = metric.cpc ?? (metric.clicks ? metric.spend / metric.clicks : 0);
-        const impliedCtr = metric.ctr ?? (metric.impressions ? (metric.clicks / metric.impressions) * 100 : 0);
-        const impliedRoas = metric.spend ? (impliedRevenue || metric.revenue) / metric.spend : 0;
-
-        await prisma.dailyMetric.create({
-          data: {
-            userId, campaignId: campaign.id,
-            date: new Date(`${metric.date}T00:00:00.000Z`),
-            platform: metric.platform,
-            spend: metric.spend, revenue: impliedRevenue || metric.revenue,
-            impressions: metric.impressions, clicks: metric.clicks,
-            conversions: metric.conversions,
-            source: 'upload', dataSourceLabel: label,
-            ctr: impliedCtr, cpc: impliedCpc, roas: impliedRoas,
+      const fileHash = createHash('sha256').update(Buffer.from(buffer)).digest('hex');
+      const previous = await prisma.uploadLog.findFirst({
+        where: { userId, fileHash, status: 'success' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (previous)
+        return NextResponse.json(
+          {
+            error: `Bu dosya ${previous.createdAt.toLocaleDateString('tr-TR')} tarihinde "${previous.fileName}" adıyla zaten yüklendi. ` +
+              `Veriyi yenilemek istiyorsanız önce yükleme geçmişinden eski kaydı silin.`,
           },
-        });
+          { status: 409 }
+        );
 
-        const orderCount = Math.max(0, Math.round(metric.orders));
-        for (let i = 0; i < orderCount; i++) {
-          await prisma.order.create({
-            data: {
-              userId, orderNumber: `${ext.toUpperCase()}-${Date.now()}-${i}`,
-              totalPrice: orderCount ? (impliedRevenue || metric.revenue) / orderCount : 0,
-              channel: metric.platform, source: 'upload', status: 'confirmed', itemCount: 1,
-              orderDate: new Date(`${metric.date}T00:00:00.000Z`),
-            },
-          });
-        }
-      }
-
-      // ── Save UploadLog ──
-      try {
-        await (prisma as any).uploadLog.create({
-          data: {
-            userId,
-            fileName: file.name,
-            fileType: ext.toUpperCase(),
-            importedRows: parsed.length,
-            dateStart: meta.dateStart ? new Date(`${meta.dateStart}T00:00:00.000Z`) : null,
-            dateEnd:   meta.dateEnd   ? new Date(`${meta.dateEnd}T00:00:00.000Z`)   : null,
-            platforms: JSON.stringify(meta.platforms),
-            status: 'success',
-          },
-        });
-      } catch {
-        // UploadLog tablosu henüz migrate edilmemişse sessizce geç
-      }
+      const saved = await persist(userId, file.name, ext, fileHash, parsed);
+      replacedRows = saved.replacedRows;
+      platforms = saved.platforms;
     }
 
+    const replacedNote = replacedRows ? ` Daha önce yüklenmiş ${replacedRows} kampanya-gün satırı yenileriyle değiştirildi.` : '';
     return NextResponse.json({
       success: true,
-      message: `"${file.name}" başarıyla işlendi. ${parsed.length} satır dashboard'a aktarıldı.`,
+      message: `"${file.name}" işlendi: ${report.rows.length} kampanya-gün satırı aktarıldı.${replacedNote}`,
       filename: file.name,
       size: file.size,
-      importedRows: parsed.length,
+      importedRows: report.rows.length,
+      replacedRows,
       storage: isDemo ? 'demo-memory' : 'database',
-      dateStart: meta.dateStart,
-      dateEnd:   meta.dateEnd,
-      platforms: meta.platforms,
+      dateStart: report.dateStart,
+      dateEnd: report.dateEnd,
+      platforms,
+      report: describeReport(parsed),
     });
   } catch (e: any) {
     console.error('[upload] error:', e);

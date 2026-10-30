@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { LEGACY_SYNTHETIC_ORDER_SOURCE } from '@/lib/store-orders';
 import { demoMetricsInRange } from '@/lib/demo-data';
 
 export async function GET(req: NextRequest) {
@@ -42,12 +43,14 @@ export async function GET(req: NextRequest) {
   const orders = await prisma.$queryRaw<Array<{ d: string; cnt: number }>>`
     SELECT DATE(order_date) as d, COUNT(*)::int as cnt
     FROM orders WHERE user_id = ${userId}
+      AND source <> ${LEGACY_SYNTHETIC_ORDER_SOURCE}
       AND order_date >= ${start} AND order_date <= ${end}
     GROUP BY DATE(order_date) ORDER BY d`;
 
   const orderMap: Record<string, number> = {};
   (orders ?? []).forEach((r: any) => {
-    orderMap[String(r.d)] = Number(r.cnt);
+    // DATE() Postgres'ten Date nesnesi olarak gelir; String(r.d) ISO anahtarla hiç eşleşmiyordu
+    orderMap[new Date(r.d).toISOString().split('T')[0]] = Number(r.cnt);
   });
 
   const metricMap: Record<string, any> = {};

@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
   }
 }
 
-/* DELETE /api/upload/logs?id=xxx  — tek log kaydını ve ilişkili verileri sil */
+/* DELETE /api/upload/logs?id=xxx  — tek yüklemeyi ve YALNIZCA o yüklemeye ait satırları sil */
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id)
@@ -34,39 +34,28 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'id parametresi gerekli' }, { status: 400 });
 
   try {
-    const log = await (prisma as any).uploadLog.findFirst({
-      where: { id, userId: session.user.id },
-    });
+    const userId = session.user.id;
+    const log = await prisma.uploadLog.findFirst({ where: { id, userId } });
     if (!log)
       return NextResponse.json({ error: 'Kayıt bulunamadı.' }, { status: 404 });
 
-    // Tarih aralığına göre bu dosyaya ait dailyMetric'leri sil
-    if (log.dateStart && log.dateEnd) {
-      await prisma.dailyMetric.deleteMany({
-        where: {
-          userId: session.user.id,
-          source: 'upload',
-          date: {
-            gte: new Date(log.dateStart),
-            lte: new Date(log.dateEnd),
-          },
-        },
-      });
-      await prisma.order.deleteMany({
-        where: {
-          userId: session.user.id,
-          source: 'upload',
-          orderDate: {
-            gte: new Date(log.dateStart),
-            lte: new Date(log.dateEnd),
-          },
-        },
-      });
-    }
+    // Silme tarih aralığına göre değil yükleme kimliğine göre yapılır; böylece aynı tarihlere
+    // ait başka yüklemeler ve API'den gelen veriler etkilenmez.
+    const [metrics, orders] = await prisma.$transaction([
+      prisma.dailyMetric.deleteMany({ where: { userId, uploadId: id } }),
+      prisma.order.deleteMany({ where: { userId, uploadId: id } }),
+      prisma.uploadLog.delete({ where: { id } }),
+    ]);
 
-    await (prisma as any).uploadLog.delete({ where: { id } });
-
-    return NextResponse.json({ success: true, message: 'Yükleme verisi silindi.' });
+    const legacy = metrics.count === 0 && orders.count === 0 && !log.fileHash;
+    return NextResponse.json({
+      success: true,
+      deletedMetrics: metrics.count,
+      deletedOrders: orders.count,
+      message: legacy
+        ? 'Kayıt silindi. Bu eski yüklemenin satırları kayda bağlı olmadığı için verileri silinmedi; tamamen temizlemek için "Tüm verileri sıfırla" kullanın.'
+        : `Yükleme silindi: ${metrics.count} metrik satırı${orders.count ? ` ve ${orders.count} sipariş` : ''} kaldırıldı.`,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Silme hatası' }, { status: 500 });
   }
