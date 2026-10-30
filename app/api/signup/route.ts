@@ -46,6 +46,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Signup error:', err);
+    if (err?.name === 'PrismaClientInitializationError') {
+      return NextResponse.json(
+        { error: 'Veritabanı bağlantısı kurulamadı; şu an yeni kayıt yapılamıyor. Yönetici .env dosyasındaki DATABASE_URL ayarını kontrol etmeli.' },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: 'Kayıt sırasında bir hata oluştu.' },
       { status: 500 }

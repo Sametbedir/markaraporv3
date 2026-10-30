@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { demoMetricsInRange, demoSettings, sumDemoMetrics } from '@/lib/demo-data';
 import { storeOrderWhere } from '@/lib/store-orders';
 
 export async function POST(req: NextRequest) {
@@ -17,28 +18,53 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = session.user.id;
-  const now = new Date();
-  const start = start_date ? new Date(start_date) : new Date(now.getTime() - 30 * 86400000);
-  const end = end_date ? new Date(end_date) : now;
+  const isDemo = userId === 'admin-demo-user';
 
-  // Get historical metrics
-  const metrics = await prisma.dailyMetric.aggregate({
-    where: { userId, date: { gte: start, lte: end } },
-    _sum: { spend: true, revenue: true, clicks: true, impressions: true, conversions: true },
-    _count: { id: true },
-  });
+  // Tarih verilmezse bugünü değil, mevcut verinin son gününü bitiş kabul et;
+  // aksi halde eski tarihli yüklemeler "veri yok" görünür.
+  let latest: Date | null = null;
+  if (!end_date) {
+    if (isDemo) {
+      const last = demoMetricsInRange().map((m) => m.date).sort().pop();
+      latest = last ? new Date(`${last}T00:00:00.000Z`) : null;
+    } else {
+      const agg = await prisma.dailyMetric.aggregate({ where: { userId }, _max: { date: true } });
+      latest = agg._max.date;
+    }
+  }
+  const end = end_date ? new Date(end_date) : latest ?? new Date();
+  const start = start_date ? new Date(start_date) : new Date(end.getTime() - 29 * 86400000);
 
-  const orders = await prisma.order.aggregate({
-    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
-    _count: { id: true },
-  });
+  const toIso = (d: Date) => d.toISOString().split('T')[0];
 
-  const totalSpend = metrics._sum?.spend ?? 0;
-  const totalRevenue = metrics._sum?.revenue ?? 0;
-  const totalClicks = metrics._sum?.clicks ?? 0;
-  const totalImpressions = metrics._sum?.impressions ?? 0;
-  const totalOrders = orders._count?.id ?? 0;
-  const dataPoints = metrics._count?.id ?? 0;
+  // Geçmiş metrikler (demo modunda bellekten, aksi halde veritabanından)
+  let totalSpend: number, totalRevenue: number, totalClicks: number, totalImpressions: number, totalOrders: number, dataPoints: number;
+  if (isDemo) {
+    const rows = demoMetricsInRange(toIso(start), toIso(end));
+    const sum = sumDemoMetrics(rows);
+    totalSpend = sum.spend;
+    totalRevenue = sum.revenue;
+    totalClicks = sum.clicks;
+    totalImpressions = sum.impressions;
+    totalOrders = sum.orders;
+    dataPoints = rows.length;
+  } else {
+    const metrics = await prisma.dailyMetric.aggregate({
+      where: { userId, date: { gte: start, lte: end } },
+      _sum: { spend: true, revenue: true, clicks: true, impressions: true, conversions: true },
+      _count: { id: true },
+    });
+    const orders = await prisma.order.aggregate({
+      where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
+      _count: { id: true },
+    });
+    totalSpend = metrics._sum?.spend ?? 0;
+    totalRevenue = metrics._sum?.revenue ?? 0;
+    totalClicks = metrics._sum?.clicks ?? 0;
+    totalImpressions = metrics._sum?.impressions ?? 0;
+    totalOrders = orders._count?.id ?? 0;
+    dataPoints = metrics._count?.id ?? 0;
+  }
 
   const avgRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
   const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
@@ -66,7 +92,18 @@ export async function POST(req: NextRequest) {
   const projectedOrders = totalSpend > 0 ? Math.round(totalOrders * budgetRatio * efficiencyFactor) : 0;
 
   // Profit calculation
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = isDemo
+    ? {
+        commissionRateTrendyol: Number(demoSettings.commission_rate_trendyol ?? 0),
+        commissionRateHepsiburada: Number(demoSettings.commission_rate_hepsiburada ?? 0),
+        commissionRateShopify: Number(demoSettings.commission_rate_shopify ?? 0),
+        commissionRateIkas: Number(demoSettings.commission_rate_ikas ?? 0),
+        commissionRateTicimax: Number(demoSettings.commission_rate_ticimax ?? 0),
+        shippingCostPerOrder: Number(demoSettings.shipping_cost_per_order ?? 0),
+        returnRate: Number(demoSettings.return_rate ?? 0),
+        productCogsRate: Number(demoSettings.product_cogs_rate ?? 0),
+      }
+    : await prisma.user.findUnique({ where: { id: userId } });
   const avgCommission = (
     (user?.commissionRateTrendyol ?? 0) + (user?.commissionRateHepsiburada ?? 0) +
     (user?.commissionRateShopify ?? 0) + (user?.commissionRateIkas ?? 0) + (user?.commissionRateTicimax ?? 0)
@@ -100,6 +137,8 @@ export async function POST(req: NextRequest) {
       avg_ctr: Math.round(avgCtr * 10000) / 100,
       avg_cpc: Math.round(avgCpc * 100) / 100,
       data_points: dataPoints,
+      period_start: toIso(start),
+      period_end: toIso(end),
     },
   });
 }

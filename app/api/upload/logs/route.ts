@@ -3,12 +3,15 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { deleteDemoUpload, demoUploads } from '@/lib/demo-data';
 
 /* GET /api/upload/logs  — yükleme geçmişini listele */
 export async function GET(_req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id)
     return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+
+  if (session.user.id === 'admin-demo-user') return NextResponse.json(demoUploads);
 
   try {
     const logs = await (prisma as any).uploadLog.findMany({
@@ -32,6 +35,12 @@ export async function DELETE(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id');
   if (!id)
     return NextResponse.json({ error: 'id parametresi gerekli' }, { status: 400 });
+
+  if (session.user.id === 'admin-demo-user') {
+    const deleted = deleteDemoUpload(id);
+    if (deleted === null) return NextResponse.json({ error: 'Kayıt bulunamadı.' }, { status: 404 });
+    return NextResponse.json({ success: true, deletedMetrics: deleted, deletedOrders: 0, message: `Yükleme silindi: ${deleted} metrik satırı kaldırıldı.` });
+  }
 
   try {
     const userId = session.user.id;

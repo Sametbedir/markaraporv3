@@ -38,6 +38,7 @@ export default function DashboardClient() {
   const [monthComp, setMonthComp] = useState<MonthComparisonData | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [dataRange, setDataRange] = useState<{ start: string | null; end: string | null } | null>(null);
 
   /* ── Read URL params on mount (from upload redirect) ── */
   useEffect(() => {
@@ -81,7 +82,13 @@ export default function DashboardClient() {
       setMonthComp(mc);
       setHistory(Array.isArray(h?.points) ? h.points : Array.isArray(h) ? h : []);
       // Check if we have meaningful data
-      setHasData(!!(s?.total_revenue || s?.total_spend || (ca && ca.length > 0)));
+      const has = !!(s?.total_revenue || s?.total_spend || s?.total_impressions || s?.total_conversions);
+      setHasData(has);
+      // Seçili aralıkta veri yoksa, yüklü verinin hangi tarihlerde olduğunu öğren
+      if (!has) {
+        const r = await fetch('/api/dashboard/data-range').then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        setDataRange(r);
+      }
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [getRange]);
@@ -173,14 +180,31 @@ export default function DashboardClient() {
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Upload className="w-8 h-8 text-primary/60" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">Henüz veri yüklenmedi</h3>
-          <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-            CSV veya Excel dosyanızı yükleyin — veriler otomatik analiz edilip buraya yansır.
-          </p>
-          <Link href="/upload"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition shadow">
-            <Upload className="w-4 h-4" /> Veri Yükle
-          </Link>
+          {dataRange?.start && dataRange?.end ? (
+            <>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Bu tarih aralığında veri yok</h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                Yüklü verileriniz {new Date(dataRange.start).toLocaleDateString('tr-TR')} – {new Date(dataRange.end).toLocaleDateString('tr-TR')} tarihleri arasında.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setDateMode('custom'); setCustomStart(dataRange.start!); setCustomEnd(dataRange.end!); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition shadow">
+                <Calendar className="w-4 h-4" /> Bu tarihleri göster
+              </button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Henüz veri yüklenmedi</h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                CSV veya Excel dosyanızı yükleyin — veriler otomatik analiz edilip buraya yansır.
+              </p>
+              <Link href="/upload"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition shadow">
+                <Upload className="w-4 h-4" /> Veri Yükle
+              </Link>
+            </>
+          )}
         </div>
       )}
 

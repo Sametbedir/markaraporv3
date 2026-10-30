@@ -7,6 +7,9 @@ import { prisma } from '@/lib/prisma';
 export async function POST() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+  if (session.user.id === 'admin-demo-user') {
+    return NextResponse.json({ error: 'Demo modunda iKas entegrasyonu kullanılamaz. Veritabanı bağlı gerçek bir hesapla giriş yapın.' }, { status: 400 });
+  }
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
 

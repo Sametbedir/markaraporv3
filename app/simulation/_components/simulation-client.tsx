@@ -103,7 +103,10 @@ export default function SimulationClient() {
               <span className="text-sm font-medium text-muted-foreground">Güven Skoru</span>
             </div>
             <p className={`text-4xl font-bold ${confidenceColor}`}>{result?.confidence_score ?? 0}%</p>
-            <p className="text-xs text-muted-foreground mt-1">{result?.historical?.data_points ?? 0} günlük veri ile hesaplandı</p>
+            <p className="text-xs text-muted-foreground mt-1">{result?.historical?.data_points ?? 0} kampanya-gün kaydı ile hesaplandı
+              {result?.historical?.period_start && result?.historical?.period_end
+                ? ` (${new Date(result.historical.period_start).toLocaleDateString('tr-TR')} – ${new Date(result.historical.period_end).toLocaleDateString('tr-TR')})`
+                : ''}</p>
           </div>
 
           {/* Cards */}

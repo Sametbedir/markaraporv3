@@ -71,10 +71,10 @@ export interface ChannelBreakdown {
 export interface MonthComparisonData {
   current_month: string;
   previous_month: string;
-  spend_change: number;
-  revenue_change: number;
-  roas_change: number;
-  orders_change: number;
+  spend_change: number | null;
+  revenue_change: number | null;
+  roas_change: number | null;
+  orders_change: number | null;
   current_spend: number;
   previous_spend: number;
   current_revenue: number;
@@ -123,6 +123,8 @@ export interface SimulationResult {
     avg_ctr: number;
     avg_cpc: number;
     data_points: number;
+    period_start?: string;
+    period_end?: string;
   };
 }
 

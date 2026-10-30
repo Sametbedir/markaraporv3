@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { addDemoMetrics } from '@/lib/demo-data';
+import { addDemoUpload, demoUploads } from '@/lib/demo-data';
 import { prisma } from '@/lib/prisma';
 import { AdReportResult, AdRow, parseAdReport } from '@/lib/import/ad-report';
 import { parseDelimited } from '@/lib/import/csv';
@@ -221,9 +221,31 @@ export async function POST(req: NextRequest) {
     let replacedRows = 0;
     let platforms = [...new Set(report.rows.map((r) => r.platform ?? DEFAULT_PLATFORM))];
 
+    const fileHash = createHash('sha256').update(Buffer.from(buffer)).digest('hex');
+    const duplicateError = (fileName: string, createdAt: Date) =>
+      NextResponse.json(
+        {
+          error: `Bu dosya ${createdAt.toLocaleDateString('tr-TR')} tarihinde "${fileName}" adıyla zaten yüklendi. ` +
+            `Veriyi yenilemek istiyorsanız önce yükleme geçmişinden eski kaydı silin.`,
+        },
+        { status: 409 }
+      );
+
     if (isDemo) {
       // Demo modu bellekte çalışır; eksik değerler yalnızca burada 0 olarak tutulur ve mağaza siparişi üretilmez.
-      addDemoMetrics(
+      const previous = demoUploads.find((u) => u.fileHash === fileHash);
+      if (previous) return duplicateError(previous.fileName, new Date(previous.createdAt));
+      addDemoUpload(
+        {
+          fileName: file.name,
+          fileType: ext.toUpperCase(),
+          kind: 'ad_report',
+          fileHash,
+          importedRows: report.rows.length,
+          dateStart: report.dateStart,
+          dateEnd: report.dateEnd,
+          platforms: JSON.stringify(platforms),
+        },
         report.rows.map((r) => ({
           date: r.date,
           platform: r.platform ?? DEFAULT_PLATFORM,
@@ -237,19 +259,11 @@ export async function POST(req: NextRequest) {
         }))
       );
     } else {
-      const fileHash = createHash('sha256').update(Buffer.from(buffer)).digest('hex');
       const previous = await prisma.uploadLog.findFirst({
         where: { userId, fileHash, status: 'success' },
         orderBy: { createdAt: 'desc' },
       });
-      if (previous)
-        return NextResponse.json(
-          {
-            error: `Bu dosya ${previous.createdAt.toLocaleDateString('tr-TR')} tarihinde "${previous.fileName}" adıyla zaten yüklendi. ` +
-              `Veriyi yenilemek istiyorsanız önce yükleme geçmişinden eski kaydı silin.`,
-          },
-          { status: 409 }
-        );
+      if (previous) return duplicateError(previous.fileName, previous.createdAt);
 
       const saved = await persist(userId, file.name, ext, fileHash, parsed);
       replacedRows = saved.replacedRows;

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { resetDemoData } from '@/lib/demo-data';
 
 export async function POST(_req: NextRequest) {
   return handleReset();
@@ -19,6 +20,11 @@ async function handleReset() {
   }
 
   const userId = session.user.id;
+
+  if (userId === 'admin-demo-user') {
+    resetDemoData();
+    return NextResponse.json({ success: true, message: 'Demo verileri sıfırlandı.' });
+  }
 
   // Yalnızca dosya yüklemesi ve manuel girişle gelen veriler silinir; iKas/Ticimax gibi API kaynakları korunur.
   const fileSources = { in: ['upload', 'manual'] };

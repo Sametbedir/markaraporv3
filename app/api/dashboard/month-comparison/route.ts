@@ -4,8 +4,15 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { storeOrderWhere } from '@/lib/store-orders';
+import { demoMetricsInRange, sumDemoMetrics } from '@/lib/demo-data';
 
-async function periodMetrics(userId: string, start: Date, end: Date) {
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+async function periodMetrics(userId: string, isDemo: boolean, start: Date, end: Date) {
+  if (isDemo) {
+    const sum = sumDemoMetrics(demoMetricsInRange(iso(start), iso(end)));
+    return { spend: sum.spend, revenue: sum.revenue, orders: sum.orders };
+  }
   const m = await prisma.dailyMetric.aggregate({
     where: { userId, date: { gte: start, lte: end } },
     _sum: { spend: true, revenue: true },
@@ -21,35 +28,47 @@ async function periodMetrics(userId: string, start: Date, end: Date) {
   };
 }
 
+async function latestDataDate(userId: string, isDemo: boolean): Promise<Date | null> {
+  if (isDemo) {
+    const last = demoMetricsInRange().map((m) => m.date).sort().pop();
+    return last ? new Date(`${last}T00:00:00`) : null;
+  }
+  const agg = await prisma.dailyMetric.aggregate({ where: { userId }, _max: { date: true } });
+  const d = agg._max.date;
+  return d ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null;
+}
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-  if (session.user.id === 'admin-demo-user') {
-    return NextResponse.json({
-      current_month: '', previous_month: '', spend_change: 0, revenue_change: 0,
-      roas_change: 0, orders_change: 0, current_spend: 0, previous_spend: 0,
-      current_revenue: 0, previous_revenue: 0, current_orders: 0,
-      previous_orders: 0, current_roas: 0, previous_roas: 0,
-      is_spend_up: false, is_revenue_up: false, is_orders_up: false, is_roas_up: false,
-    });
-  }
+  const userId = session.user.id;
+  const isDemo = userId === 'admin-demo-user';
 
+  // Karşılaştırma son verinin olduğu güne göre yapılır (bugünden eskiyse), ve
+  // iki ayın AYNI gün sayısı kıyaslanır: örn. 1–14 Eylül ile 1–14 Ağustos.
   const today = new Date();
-  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const prevMonthEnd = new Date(currentMonthStart.getTime() - 86400000);
-  const prevMonthStart = new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), 1);
+  const latest = await latestDataDate(userId, isDemo);
+  const anchor = latest && latest < today ? latest : today;
+  const currentStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const dayOfMonth = anchor.getDate();
+  const prevStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+  const prevMonthLastDay = new Date(anchor.getFullYear(), anchor.getMonth(), 0).getDate();
+  const prevEnd = new Date(prevStart.getFullYear(), prevStart.getMonth(), Math.min(dayOfMonth, prevMonthLastDay));
 
-  const c = await periodMetrics(session.user.id, currentMonthStart, today);
-  const p = await periodMetrics(session.user.id, prevMonthStart, prevMonthEnd);
+  const c = await periodMetrics(userId, isDemo, currentStart, anchor);
+  const p = await periodMetrics(userId, isDemo, prevStart, prevEnd);
 
   const cRoas = c.spend > 0 ? c.revenue / c.spend : 0;
   const pRoas = p.spend > 0 ? p.revenue / p.spend : 0;
 
-  const pct = (cur: number, prev: number) => prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : 0;
+  // Önceki dönem 0 ise yüzde değişim tanımsızdır (null), "%0" gösterilmez
+  const pct = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null);
+  const range = (a: Date, b: Date) =>
+    `${a.getDate()}–${b.getDate()} ${a.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}`;
 
   return NextResponse.json({
-    current_month: currentMonthStart.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }),
-    previous_month: prevMonthStart.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }),
+    current_month: range(currentStart, anchor),
+    previous_month: range(prevStart, prevEnd),
     spend_change: pct(c.spend, p.spend),
     revenue_change: pct(c.revenue, p.revenue),
     roas_change: pct(cRoas, pRoas),

@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { addDemoMetrics } from '@/lib/demo-data';
+import { addDemoUpload } from '@/lib/demo-data';
 import { parseDate } from '@/lib/import/dates';
 import { parseNumber } from '@/lib/import/numbers';
 
@@ -74,11 +74,17 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
 
     if (userId === 'admin-demo-user') {
-      addDemoMetrics([{
-        date, platform, campaign: campaignName,
-        spend: spend ?? 0, revenue: revenue ?? 0, orders: 0,
-        impressions: impressions ?? 0, clicks: clicks ?? 0, conversions: conversions ?? 0,
-      }]);
+      addDemoUpload(
+        {
+          fileName: campaignName, fileType: 'MANUEL', kind: 'manual', fileHash: null, importedRows: 1,
+          dateStart: date, dateEnd: date, platforms: JSON.stringify([platform]),
+        },
+        [{
+          date, platform, campaign: campaignName,
+          spend: spend ?? 0, revenue: revenue ?? 0, orders: 0,
+          impressions: impressions ?? 0, clicks: clicks ?? 0, conversions: conversions ?? 0,
+        }]
+      );
     } else {
       await prisma.$transaction(async (tx) => {
         const log = await tx.uploadLog.create({
