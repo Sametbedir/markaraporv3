@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import SidebarLayout from '@/components/sidebar-layout';
 import DashboardClient from './_components/dashboard-client';
-import AIAnalizKarti from '@/components/AIAnalizKarti';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,25 +10,12 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect('/');
 
-  const anlikVeriler = {
-    toplamHarcama: 0,
-    toplamCiro: 0,
-    netKar: 0,
-    siparis: 0,
-    roas: 0,
-    netRoas: 0,
-    karMarji: "0%"
-  };
-
   return (
     <SidebarLayout>
       <div className="p-6 space-y-6">
         <Suspense fallback={<div className="h-96 flex items-center justify-center text-muted-foreground text-sm">Yükleniyor...</div>}>
           <DashboardClient />
         </Suspense>
-
-        {/* Yapay Zeka Analiz Asistanı */}
-        <AIAnalizKarti dashboardVerileri={anlikVeriler} />
 
         {/* SEO & GEO ve Rakip Analizi Hızlı Erişim Kartları */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -80,4 +66,4 @@ export default async function DashboardPage() {
       </div>
     </SidebarLayout>
   );
-}
+}
