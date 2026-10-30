@@ -159,39 +159,3 @@ export async function buildBrandMonthReport(
     ),
   };
 }
-
-export type UptimeSummary = {
-  id: string;
-  name: string;
-  url: string;
-  status: string | null;
-  checkedAt: string | null;
-  uptimePercent: number | null;
-  avgResponseMs: number | null;
-  checks: number;
-};
-
-/** Son 30 günün erişilebilirlik özeti; kontrol yoksa yüzdeler null. */
-export async function uptimeSummary(brandId: string): Promise<UptimeSummary[]> {
-  const since = new Date(Date.now() - 30 * 86400000);
-  const monitors = await prisma.uptimeMonitor.findMany({
-    where: { brandId, isActive: true },
-    include: { checks: { where: { checkedAt: { gte: since } }, orderBy: { checkedAt: 'desc' } } },
-    orderBy: { createdAt: 'asc' },
-  });
-  return monitors.map((m) => {
-    const checks = m.checks;
-    const up = checks.filter((c) => c.status === 'up').length;
-    const times = checks.map((c) => c.responseTimeMs).filter((t): t is number => t !== null);
-    return {
-      id: m.id,
-      name: m.name,
-      url: m.url,
-      status: checks[0]?.status ?? null,
-      checkedAt: checks[0]?.checkedAt.toISOString() ?? null,
-      uptimePercent: checks.length ? (up / checks.length) * 100 : null,
-      avgResponseMs: times.length ? times.reduce((a, b) => a + b, 0) / times.length : null,
-      checks: checks.length,
-    };
-  });
-}

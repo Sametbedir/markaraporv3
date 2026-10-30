@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { hashShareToken, isWellFormedToken, linkState, parseSections } from '@/lib/share-token';
-import { uptimeSummary } from '@/lib/report/brand-report';
+import { portalUptime } from '@/lib/uptime/summary';
 import { publishedDocument } from '@/lib/report/document-server';
 import { goalProgress } from '@/lib/report/goal-progress';
 import { isMonth } from '@/lib/report/months';
@@ -67,7 +67,7 @@ async function loadPortal(token: string, ay: unknown): Promise<PortalResult> {
             .then(publishedDocument)
         : null,
       sections.includes('goals') ? goalProgress(brand.id) : null,
-      sections.includes('uptime') ? uptimeSummary(brand.id) : null,
+      sections.includes('uptime') ? portalUptime(brand.id) : null,
     ]);
 
     return {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -18,6 +18,15 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Aktif markada erişilemeyen site veya SSL sorunu varsa menüde rozet gösterilir
+  const [uptimeAlerts, setUptimeAlerts] = useState(0);
+  useEffect(() => {
+    if (!session?.user) return;
+    fetch('/api/uptime/alerts')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setUptimeAlerts(Array.isArray(d?.alerts) ? d.alerts.length : 0))
+      .catch(() => {});
+  }, [session?.user, pathname]);
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -100,7 +109,12 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
                 )}
                 <item.icon className={`w-5 h-5 ${active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
                 {item.label}
-                {active && <ChevronRight className="w-4 h-4 ml-auto text-primary/60" />}
+                {item.href === '/uptime' && uptimeAlerts > 0 && (
+                  <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-rose-600 text-white text-[11px] font-semibold flex items-center justify-center" aria-label={`${uptimeAlerts} uptime uyarısı`}>
+                    {uptimeAlerts}
+                  </span>
+                )}
+                {active && !(item.href === '/uptime' && uptimeAlerts > 0) && <ChevronRight className="w-4 h-4 ml-auto text-primary/60" />}
               </Link>
             );
           })}

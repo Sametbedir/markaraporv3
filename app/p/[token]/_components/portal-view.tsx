@@ -3,7 +3,8 @@
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { Store, FileDown, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, XCircle, Target, Activity, BarChart3 } from 'lucide-react';
-import type { UptimeSummary } from '@/lib/report/brand-report';
+import type { PortalUptime as UptimeSummary } from '@/lib/uptime/summary';
+import { formatDuration } from '@/lib/uptime/stats';
 import type { ReportDocumentData } from '@/lib/report/document';
 import { splitLines } from '@/lib/report/document';
 import { reportHighlights } from '@/lib/report/highlights';
@@ -275,6 +276,15 @@ function UptimeSection({ uptime }: { uptime: UptimeSummary[] }) {
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
                   <div><dt className="text-xs text-muted-foreground">Erişilebilirlik</dt><dd className="font-semibold tabular-nums">{m.uptimePercent === null ? '—' : `%${num(m.uptimePercent, 2)}`}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Ort. yanıt süresi</dt><dd className="font-semibold tabular-nums">{m.avgResponseMs === null ? '—' : `${num(m.avgResponseMs)} ms`}</dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Kesinti</dt><dd className="font-semibold tabular-nums">{m.incidents === 0 ? 'Yok' : `${m.incidents} (toplam ${formatDuration(m.downtimeMs)})`}</dd></div>
+                  {m.sslState !== 'none' && (
+                    <div>
+                      <dt className="text-xs text-muted-foreground">SSL sertifikası</dt>
+                      <dd className={`font-semibold ${m.sslState === 'ok' ? '' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {m.sslState === 'expired' ? 'Süresi dolmuş' : m.sslState === 'invalid' ? 'Geçersiz' : m.sslDaysLeft === null ? '—' : `${m.sslDaysLeft} gün geçerli`}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   {m.checks} kontrol{m.checkedAt ? ` · son kontrol ${new Date(m.checkedAt).toLocaleString('tr-TR')}` : ''}

@@ -302,16 +302,23 @@ model Goal {
 }
 
 model UptimeMonitor {
-  id              String   @id @default(uuid())
-  userId          String   @map("user_id")
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
   // Eski kayıtlarda boş olabilir; ilk girişte varsayılan markaya taşınır (lib/brand.ts)
-  brandId         String?  @map("brand_id")
+  brandId         String?   @map("brand_id")
   name            String
   url             String
-  intervalSeconds Int      @default(300) @map("interval_seconds")
-  timeoutSeconds  Int      @default(15) @map("timeout_seconds")
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
+  intervalSeconds Int       @default(300) @map("interval_seconds")
+  timeoutSeconds  Int       @default(15) @map("timeout_seconds")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  // Otomatik kontrol zamanlaması için son kontrol
+  lastCheckedAt   DateTime? @map("last_checked_at")
+  // SSL sertifikası (yalnızca https; 12 saatte bir okunur)
+  sslExpiresAt    DateTime? @map("ssl_expires_at")
+  sslIssuer       String?   @map("ssl_issuer")
+  sslError        String?   @map("ssl_error")
+  sslCheckedAt    DateTime? @map("ssl_checked_at")
 
   user   User          @relation(fields: [userId], references: [id])
   brand  Brand?        @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -319,6 +326,7 @@ model UptimeMonitor {
 
   @@index([userId])
   @@index([brandId])
+  @@index([isActive, lastCheckedAt])
   @@map("uptime_monitors")
 }
 

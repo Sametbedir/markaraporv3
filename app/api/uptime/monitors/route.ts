@@ -4,121 +4,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { validateMonitorUrl } from '@/lib/safe-url';
+import { checkToJson, runMonitorCheck } from '@/lib/uptime/check';
+import { monitorSummaries } from '@/lib/uptime/summary';
+import { validateTiming } from '@/lib/uptime/stats';
 
+/** GET /api/uptime/monitors — aktif markanın monitörleri; 24 saat/7 gün/30 gün istatistik, SSL, kesintiler */
 export async function GET() {
   const ctx = await requireBrand();
   if (ctx instanceof NextResponse) return ctx;
-  const { brandId } = ctx;
-
-  const monitors = await prisma.uptimeMonitor.findMany({
-    where: { brandId },
-    include: {
-      checks: {
-        orderBy: { checkedAt: 'desc' },
-        take: 1,
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  const result = (monitors ?? []).map((m: any) => {
-    const lastCheck = m.checks?.[0] ?? null;
-    return {
-      id: m.id,
-      name: m.name,
-      url: m.url,
-      interval_seconds: m.intervalSeconds,
-      timeout_seconds: m.timeoutSeconds,
-      is_active: m.isActive,
-      current: lastCheck ? {
-        status: lastCheck.status,
-        status_code: lastCheck.statusCode,
-        response_time_ms: lastCheck.responseTimeMs,
-        error_message: lastCheck.errorMessage,
-        checked_at: lastCheck.checkedAt?.toISOString?.(),
-      } : null,
-    };
-  });
-
-  return NextResponse.json(result);
+  return NextResponse.json(await monitorSummaries(ctx.brandId));
 }
 
+/** POST /api/uptime/monitors { name, url, interval_seconds, timeout_seconds } — ekler ve hemen kontrol eder */
 export async function POST(req: NextRequest) {
   const ctx = await requireBrand();
   if (ctx instanceof NextResponse) return ctx;
 
-  const body = await req.json();
-  const { name, url, interval_seconds = 300, timeout_seconds = 15 } = body ?? {};
+  const body = await req.json().catch(() => null);
+  const name = String(body?.name ?? '').trim().slice(0, 80);
+  const rawUrl = String(body?.url ?? '').trim();
+  if (!name || !rawUrl) return NextResponse.json({ error: 'Ad ve URL gereklidir' }, { status: 400 });
 
-  if (!name || !url) {
-    return NextResponse.json({ error: 'Ad ve URL gereklidir' }, { status: 400 });
-  }
+  const timing = validateTiming(body?.interval_seconds ?? 300, body?.timeout_seconds ?? 15);
+  if ('error' in timing) return NextResponse.json({ error: timing.error }, { status: 400 });
 
-  if (Number(interval_seconds) < 60 || Number(interval_seconds) > 86400 || Number(timeout_seconds) < 1 || Number(timeout_seconds) > 60) {
-    return NextResponse.json({ error: 'Minimum kontrol aralığı 60 saniyedir' }, { status: 400 });
-  }
-
-  const rawUrl = String(url).trim();
-  let monitorUrl: string;
+  let url: string;
   try {
-    monitorUrl = await validateMonitorUrl(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
+    url = await validateMonitorUrl(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? 'Geçersiz URL' }, { status: 400 });
   }
 
   const monitor = await prisma.uptimeMonitor.create({
-    data: {
-      userId: ctx.userId,
-      brandId: ctx.brandId,
-      name: String(name).trim(),
-      url: monitorUrl,
-      intervalSeconds: Number(interval_seconds),
-      timeoutSeconds: Number(timeout_seconds),
-    },
+    data: { userId: ctx.userId, brandId: ctx.brandId, name, url, intervalSeconds: timing.interval, timeoutSeconds: timing.timeout },
   });
-
-  // Do initial check
-  let checkResult: any = null;
-  try {
-    const startTime = Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout_seconds * 1000);
-    
-    const response = await fetch(monitorUrl, {
-      signal: controller.signal,
-      redirect: 'manual',
-      headers: { 'User-Agent': 'MarkaRapor-UptimeMonitor/1.0' },
-    });
-    clearTimeout(timeoutId);
-    const elapsed = Date.now() - startTime;
-
-    const status = response.status >= 200 && response.status < 400 ? 'up' : response.status >= 500 ? 'down' : 'warning';
-
-    checkResult = await prisma.uptimeCheck.create({
-      data: {
-        monitorId: monitor.id,
-        status,
-        statusCode: response.status,
-        responseTimeMs: elapsed,
-      },
-    });
-  } catch {
-    checkResult = await prisma.uptimeCheck.create({
-      data: {
-        monitorId: monitor.id,
-        status: 'down',
-        errorType: 'connection_error',
-        errorMessage: 'Bağlantı kurulamadı',
-      },
-    });
-  }
-
-  return NextResponse.json({
-    monitor: {
-      id: monitor.id,
-      name: monitor.name,
-      url: monitor.url,
-    },
-    result: checkResult,
-  });
+  const check = await runMonitorCheck(monitor, { forceSsl: true });
+  return NextResponse.json({ monitor: { id: monitor.id, name: monitor.name, url: monitor.url }, result: checkToJson(check) }, { status: 201 });
 }
