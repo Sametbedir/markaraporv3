@@ -1,19 +1,17 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { validateMonitorUrl } from '@/lib/safe-url';
-import { demoMonitors } from '@/lib/demo-data';
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-
-  if (session.user.id === 'admin-demo-user') return NextResponse.json(demoMonitors);
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   const monitors = await prisma.uptimeMonitor.findMany({
-    where: { userId: session.user.id },
+    where: { brandId },
     include: {
       checks: {
         orderBy: { checkedAt: 'desc' },
@@ -46,27 +44,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
 
   const body = await req.json();
   const { name, url, interval_seconds = 300, timeout_seconds = 15 } = body ?? {};
 
   if (!name || !url) {
     return NextResponse.json({ error: 'Ad ve URL gereklidir' }, { status: 400 });
-  }
-
-  if (session.user.id === 'admin-demo-user') {
-    const rawUrl = String(url).trim();
-    let monitorUrl: string;
-    try {
-      monitorUrl = await validateMonitorUrl(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
-    } catch (error: any) {
-      return NextResponse.json({ error: error?.message ?? 'Geçersiz URL' }, { status: 400 });
-    }
-    const monitor = { id: crypto.randomUUID(), name: String(name).trim(), url: monitorUrl, interval_seconds: Number(interval_seconds), timeout_seconds: Number(timeout_seconds), is_active: true, current: null };
-    demoMonitors.unshift(monitor);
-    return NextResponse.json({ monitor, result: null, storage: 'demo-memory' }, { status: 201 });
   }
 
   if (Number(interval_seconds) < 60 || Number(interval_seconds) > 86400 || Number(timeout_seconds) < 1 || Number(timeout_seconds) > 60) {
@@ -83,7 +68,8 @@ export async function POST(req: NextRequest) {
 
   const monitor = await prisma.uptimeMonitor.create({
     data: {
-      userId: session.user.id,
+      userId: ctx.userId,
+      brandId: ctx.brandId,
       name: String(name).trim(),
       url: monitorUrl,
       intervalSeconds: Number(interval_seconds),

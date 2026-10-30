@@ -1,21 +1,18 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
-import { deleteDemoUpload, demoUploads } from '@/lib/demo-data';
 
 /* GET /api/upload/logs  — yükleme geçmişini listele */
 export async function GET(_req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id)
-    return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-
-  if (session.user.id === 'admin-demo-user') return NextResponse.json(demoUploads);
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   try {
-    const logs = await (prisma as any).uploadLog.findMany({
-      where: { userId: session.user.id },
+    const logs = await prisma.uploadLog.findMany({
+      where: { brandId },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -28,31 +25,24 @@ export async function GET(_req: NextRequest) {
 
 /* DELETE /api/upload/logs?id=xxx  — tek yüklemeyi ve YALNIZCA o yüklemeye ait satırları sil */
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id)
-    return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   const id = new URL(req.url).searchParams.get('id');
   if (!id)
     return NextResponse.json({ error: 'id parametresi gerekli' }, { status: 400 });
 
-  if (session.user.id === 'admin-demo-user') {
-    const deleted = deleteDemoUpload(id);
-    if (deleted === null) return NextResponse.json({ error: 'Kayıt bulunamadı.' }, { status: 404 });
-    return NextResponse.json({ success: true, deletedMetrics: deleted, deletedOrders: 0, message: `Yükleme silindi: ${deleted} metrik satırı kaldırıldı.` });
-  }
-
   try {
-    const userId = session.user.id;
-    const log = await prisma.uploadLog.findFirst({ where: { id, userId } });
+    const log = await prisma.uploadLog.findFirst({ where: { id, brandId } });
     if (!log)
       return NextResponse.json({ error: 'Kayıt bulunamadı.' }, { status: 404 });
 
     // Silme tarih aralığına göre değil yükleme kimliğine göre yapılır; böylece aynı tarihlere
     // ait başka yüklemeler ve API'den gelen veriler etkilenmez.
     const [metrics, orders] = await prisma.$transaction([
-      prisma.dailyMetric.deleteMany({ where: { userId, uploadId: id } }),
-      prisma.order.deleteMany({ where: { userId, uploadId: id } }),
+      prisma.dailyMetric.deleteMany({ where: { brandId, uploadId: id } }),
+      prisma.order.deleteMany({ where: { brandId, uploadId: id } }),
       prisma.uploadLog.delete({ where: { id } }),
     ]);
 

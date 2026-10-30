@@ -1,41 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { brandCosts, requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { storeOrderWhere } from '@/lib/store-orders';
-import { demoMetricsInRange } from '@/lib/demo-data';
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-  }
-
-  if (session.user.id === 'admin-demo-user') {
-    const url = new URL(req.url);
-    const metrics = demoMetricsInRange(url.searchParams.get('start_date'), url.searchParams.get('end_date'));
-    const totalSpend = metrics.reduce((sum, metric) => sum + metric.spend, 0);
-    const totalRevenue = metrics.reduce((sum, metric) => sum + metric.revenue, 0);
-    const totalOrders = metrics.reduce((sum, metric) => sum + metric.orders, 0);
-    const totalImpressions = metrics.reduce((sum, metric) => sum + metric.impressions, 0);
-    const totalClicks = metrics.reduce((sum, metric) => sum + metric.clicks, 0);
-    const totalConversions = metrics.reduce((sum, metric) => sum + metric.conversions, 0);
-    return NextResponse.json({
-      total_spend: totalSpend, total_revenue: totalRevenue, total_orders: totalOrders, has_store_orders: totalOrders > 0,
-      total_impressions: totalImpressions, total_clicks: totalClicks, total_conversions: totalConversions,
-      avg_roas: totalSpend ? totalRevenue / totalSpend : 0,
-      avg_ctr: totalImpressions ? (totalClicks / totalImpressions) * 100 : 0,
-      avg_cpc: 0,
-      total_profit: totalRevenue - totalSpend,
-      profit_margin: totalRevenue ? ((totalRevenue - totalSpend) / totalRevenue) * 100 : 0,
-      net_roas: totalSpend ? (totalRevenue - totalSpend) / totalSpend : 0,
-      total_commission: 0,
-      total_shipping: 0,
-      total_returns: 0,
-      total_cogs: 0,
-    });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   const url = new URL(req.url);
   const startDate = url.searchParams.get('start_date');
@@ -45,15 +18,13 @@ export async function GET(req: NextRequest) {
   const end = endDate ? new Date(endDate) : now;
   const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 86400000);
 
-  const userId = session.user.id;
-
   const metrics = await prisma.dailyMetric.aggregate({
-    where: { userId, date: { gte: start, lte: end } },
+    where: { brandId, date: { gte: start, lte: end } },
     _sum: { spend: true, revenue: true, impressions: true, clicks: true, conversions: true },
   });
 
   const orderAgg = await prisma.order.aggregate({
-    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
+    where: { brandId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
     _sum: { totalPrice: true },
   });
@@ -71,18 +42,11 @@ export async function GET(req: NextRequest) {
   const avgCpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
 
   // Profit calculation
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  const avgCommission = (
-    (user?.commissionRateTrendyol ?? 0) +
-    (user?.commissionRateHepsiburada ?? 0) +
-    (user?.commissionRateShopify ?? 0) +
-    (user?.commissionRateIkas ?? 0) +
-    (user?.commissionRateTicimax ?? 0)
-  ) / 5;
-  const commissionCost = totalRevenue * (avgCommission / 100);
-  const shippingCost = totalOrders * (user?.shippingCostPerOrder ?? 0);
-  const returnsCost = totalRevenue * ((user?.returnRate ?? 0) / 100);
-  const cogsCost = totalRevenue * ((user?.productCogsRate ?? 0) / 100);
+  const costs = brandCosts(ctx.brand);
+  const commissionCost = totalRevenue * (costs.avgCommission / 100);
+  const shippingCost = totalOrders * costs.shippingCostPerOrder;
+  const returnsCost = totalRevenue * (costs.returnRate / 100);
+  const cogsCost = totalRevenue * (costs.productCogsRate / 100);
   const totalProfit = totalRevenue - totalSpend - commissionCost - shippingCost - returnsCost - cogsCost;
   const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
   const netRoas = totalSpend > 0 ? totalProfit / totalSpend : 0;

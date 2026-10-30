@@ -164,7 +164,11 @@ export default function SettingsClient() {
 
         {activeTab === 'costs' && (
           <div className="space-y-6 max-w-lg">
-            <p className="text-sm text-muted-foreground">Kâr hesaplaması için gider bilgilerinizi girin.</p>
+            <p className="text-sm text-muted-foreground">
+              Kâr hesaplaması için gider bilgilerini girin. Bu bilgiler{' '}
+              <strong className="text-foreground">{data?.brand_name ?? 'aktif marka'}</strong> markasına aittir;
+              diğer markaların gider yapısı ayrıdır.
+            </p>
             <div>
               <h4 className="font-medium text-foreground mb-3 flex items-center gap-1.5"><Percent className="w-4 h-4 text-primary" /> Komisyon Oranları (%)</h4>
               <div className="grid grid-cols-2 gap-4">

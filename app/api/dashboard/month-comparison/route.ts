@@ -1,24 +1,17 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { storeOrderWhere } from '@/lib/store-orders';
-import { demoMetricsInRange, sumDemoMetrics } from '@/lib/demo-data';
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-async function periodMetrics(userId: string, isDemo: boolean, start: Date, end: Date) {
-  if (isDemo) {
-    const sum = sumDemoMetrics(demoMetricsInRange(iso(start), iso(end)));
-    return { spend: sum.spend, revenue: sum.revenue, orders: sum.orders };
-  }
+async function periodMetrics(brandId: string, start: Date, end: Date) {
   const m = await prisma.dailyMetric.aggregate({
-    where: { userId, date: { gte: start, lte: end } },
+    where: { brandId, date: { gte: start, lte: end } },
     _sum: { spend: true, revenue: true },
   });
   const o = await prisma.order.aggregate({
-    where: { userId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
+    where: { brandId, ...storeOrderWhere, orderDate: { gte: start, lte: end } },
     _count: { id: true },
   });
   return {
@@ -28,26 +21,21 @@ async function periodMetrics(userId: string, isDemo: boolean, start: Date, end: 
   };
 }
 
-async function latestDataDate(userId: string, isDemo: boolean): Promise<Date | null> {
-  if (isDemo) {
-    const last = demoMetricsInRange().map((m) => m.date).sort().pop();
-    return last ? new Date(`${last}T00:00:00`) : null;
-  }
-  const agg = await prisma.dailyMetric.aggregate({ where: { userId }, _max: { date: true } });
+async function latestDataDate(brandId: string): Promise<Date | null> {
+  const agg = await prisma.dailyMetric.aggregate({ where: { brandId }, _max: { date: true } });
   const d = agg._max.date;
   return d ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null;
 }
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-  const userId = session.user.id;
-  const isDemo = userId === 'admin-demo-user';
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   // Karşılaştırma son verinin olduğu güne göre yapılır (bugünden eskiyse), ve
   // iki ayın AYNI gün sayısı kıyaslanır: örn. 1–14 Eylül ile 1–14 Ağustos.
   const today = new Date();
-  const latest = await latestDataDate(userId, isDemo);
+  const latest = await latestDataDate(brandId);
   const anchor = latest && latest < today ? latest : today;
   const currentStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   const dayOfMonth = anchor.getDate();
@@ -55,8 +43,8 @@ export async function GET() {
   const prevMonthLastDay = new Date(anchor.getFullYear(), anchor.getMonth(), 0).getDate();
   const prevEnd = new Date(prevStart.getFullYear(), prevStart.getMonth(), Math.min(dayOfMonth, prevMonthLastDay));
 
-  const c = await periodMetrics(userId, isDemo, currentStart, anchor);
-  const p = await periodMetrics(userId, isDemo, prevStart, prevEnd);
+  const c = await periodMetrics(brandId, currentStart, anchor);
+  const p = await periodMetrics(brandId, prevStart, prevEnd);
 
   const cRoas = c.spend > 0 ? c.revenue / c.spend : 0;
   const pRoas = p.spend > 0 ? p.revenue / p.spend : 0;

@@ -1,23 +1,18 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
-import { demoMetricsInRange } from '@/lib/demo-data';
 
-/** Kullanıcının yüklü reklam verisinin ilk ve son tarihi (veri yoksa null). */
+/** Aktif markanın yüklü reklam verisinin ilk ve son tarihi (veri yoksa null). */
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-
-  if (session.user.id === 'admin-demo-user') {
-    const dates = demoMetricsInRange().map((m) => m.date).sort();
-    return NextResponse.json({ start: dates[0] ?? null, end: dates[dates.length - 1] ?? null });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   try {
     const agg = await prisma.dailyMetric.aggregate({
-      where: { userId: session.user.id },
+      where: { brandId },
       _min: { date: true },
       _max: { date: true },
     });

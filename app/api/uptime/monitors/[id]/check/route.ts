@@ -1,29 +1,16 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { validateMonitorUrl } from '@/lib/safe-url';
-import { demoMonitors } from '@/lib/demo-data';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
   const { id } = await params;
-  if (session.user.id === 'admin-demo-user') {
-    const monitor = demoMonitors.find((item) => item.id === id);
-    if (!monitor) return NextResponse.json({ error: 'Monitör bulunamadı' }, { status: 404 });
-    const started = Date.now();
-    try {
-      const safeUrl = await validateMonitorUrl(monitor.url);
-      const response = await fetch(safeUrl, { redirect: 'manual', signal: AbortSignal.timeout(monitor.timeout_seconds * 1000) });
-      monitor.current = { status: response.status < 400 ? 'up' : response.status >= 500 ? 'down' : 'warning', status_code: response.status, response_time_ms: Date.now() - started, checked_at: new Date().toISOString() };
-    } catch {
-      monitor.current = { status: 'down', error_message: 'Bağlantı kurulamadı', checked_at: new Date().toISOString() };
-    }
-    return NextResponse.json(monitor.current);
-  }
-  const monitor = await prisma.uptimeMonitor.findFirst({ where: { id, userId: session.user.id } });
+  const monitor = await prisma.uptimeMonitor.findFirst({ where: { id, brandId } });
   if (!monitor) return NextResponse.json({ error: 'Monitör bulunamadı' }, { status: 404 });
 
   try {

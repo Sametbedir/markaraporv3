@@ -1,16 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { generateCompetitorReport, CompetitorAnalysisRequest } from '@/lib/competitor-analysis';
 
 export async function POST(req: NextRequest) {
   // AI kotası harcayan bir uç nokta; yalnızca giriş yapmış kullanıcılar kullanabilir
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 401 });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
 
   try {
     const body = (await req.json()) as CompetitorAnalysisRequest;
@@ -32,20 +30,19 @@ export async function POST(req: NextRequest) {
 
     let savedId: string | null = null;
     try {
-      if (session.user.id !== 'admin-demo-user') {
-        const saved = await prisma.manualEntry.create({
-          data: {
-            userId: session.user.id,
-            entryType: 'competitor_report',
-            entryCategory: body.niche || 'e-ticaret',
-            dataJson: JSON.stringify(report),
-            fileName: `${body.ownBrandName} vs ${body.competitorBrandName}`,
-            fileType: 'competitor_json',
-            status: 'completed',
-          },
-        });
-        savedId = saved.id;
-      }
+      const saved = await prisma.manualEntry.create({
+        data: {
+          userId: ctx.userId,
+          brandId: ctx.brandId,
+          entryType: 'competitor_report',
+          entryCategory: body.niche || 'e-ticaret',
+          dataJson: JSON.stringify(report),
+          fileName: `${body.ownBrandName} vs ${body.competitorBrandName}`,
+          fileType: 'competitor_json',
+          status: 'completed',
+        },
+      });
+      savedId = saved.id;
     } catch (dbErr) {
       console.warn('Rakip analiz raporu DB kaydı atlandı:', dbErr);
     }
@@ -66,14 +63,12 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ reports: [] });
-    }
+    const ctx = await requireBrand();
+    if (ctx instanceof NextResponse) return ctx;
 
     const entries = await prisma.manualEntry.findMany({
       where: {
-        userId: session.user.id,
+        brandId: ctx.brandId,
         entryType: 'competitor_report',
       },
       orderBy: { createdAt: 'desc' },

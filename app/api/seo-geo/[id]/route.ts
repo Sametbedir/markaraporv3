@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 
 export async function DELETE(
@@ -9,17 +9,15 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Yetkisiz erişim' }, { status: 401 });
-    }
+    const ctx = await requireBrand();
+    if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await context.params;
 
     await prisma.manualEntry.deleteMany({
       where: {
         id,
-        userId: session.user.id,
+        brandId: ctx.brandId,
         entryType: 'seo_geo_report',
       },
     });

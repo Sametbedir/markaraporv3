@@ -18,15 +18,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (process.env.NODE_ENV !== 'production' && process.env.DEMO_ADMIN_ENABLED === 'true' && normalizedEmail === 'admin@markarapor.com' && normalizedPassword === 'Admin123') {
-      return NextResponse.json({
-        id: 'admin-demo-user',
-        name: 'Admin',
-        email: normalizedEmail,
-        isAdmin: true,
-      });
-    }
-
     let user;
     try {
       user = await prisma.user.findUnique({

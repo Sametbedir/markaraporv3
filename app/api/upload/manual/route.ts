@@ -1,9 +1,8 @@
 ﻿export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
-import { addDemoUpload } from '@/lib/demo-data';
 import { parseDate } from '@/lib/import/dates';
 import { parseNumber } from '@/lib/import/numbers';
 
@@ -26,10 +25,9 @@ function readField(raw: unknown, label: string, { integer = false } = {}): Field
  * newCustomers, returningCustomers.
  */
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Oturum açmanız gerekiyor.' }, { status: 401 });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { userId, brandId } = ctx;
 
   try {
     const body = await req.json().catch(() => null);
@@ -71,63 +69,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'En az bir metrik (harcama, ciro, gösterim, tıklama veya müşteri) girin.' }, { status: 400 });
     }
 
-    const userId = session.user.id;
-
-    if (userId === 'admin-demo-user') {
-      addDemoUpload(
-        {
-          fileName: campaignName, fileType: 'MANUEL', kind: 'manual', fileHash: null, importedRows: 1,
-          dateStart: date, dateEnd: date, platforms: JSON.stringify([platform]),
+    await prisma.$transaction(async (tx) => {
+      const log = await tx.uploadLog.create({
+        data: {
+          userId,
+          brandId,
+          fileName: campaignName,
+          fileType: 'MANUEL',
+          kind: 'manual',
+          importedRows: 1,
+          dateStart: new Date(`${date}T00:00:00.000Z`),
+          dateEnd: new Date(`${date}T00:00:00.000Z`),
+          platforms: JSON.stringify([platform]),
+          status: 'success',
         },
-        [{
-          date, platform, campaign: campaignName,
-          spend: spend ?? 0, revenue: revenue ?? 0, orders: 0,
-          impressions: impressions ?? 0, clicks: clicks ?? 0, conversions: conversions ?? 0,
-        }]
-      );
-    } else {
-      await prisma.$transaction(async (tx) => {
-        const log = await tx.uploadLog.create({
-          data: {
-            userId,
-            fileName: campaignName,
-            fileType: 'MANUEL',
-            kind: 'manual',
-            importedRows: 1,
-            dateStart: new Date(`${date}T00:00:00.000Z`),
-            dateEnd: new Date(`${date}T00:00:00.000Z`),
-            platforms: JSON.stringify([platform]),
-            status: 'success',
-          },
-        });
-
-        const campaign =
-          (await tx.campaign.findFirst({ where: { userId, name: campaignName, platform } })) ??
-          (await tx.campaign.create({
-            data: { userId, name: campaignName, platform, source: 'manual', dataSourceLabel: 'Manuel Giriş' },
-          }));
-
-        await tx.dailyMetric.create({
-          data: {
-            userId,
-            campaignId: campaign.id,
-            uploadId: log.id,
-            date: new Date(`${date}T00:00:00.000Z`),
-            platform,
-            spend,
-            revenue,
-            impressions,
-            clicks,
-            conversions,
-            ctr: clicks !== null && impressions ? (clicks / impressions) * 100 : undefined,
-            cpc: spend !== null && clicks ? spend / clicks : undefined,
-            roas: revenue !== null && spend ? revenue / spend : undefined,
-            source: 'manual',
-            dataSourceLabel: 'Manuel Giriş',
-          },
-        });
       });
-    }
+
+      const campaign =
+        (await tx.campaign.findFirst({ where: { brandId, name: campaignName, platform } })) ??
+        (await tx.campaign.create({
+          data: { userId, brandId, name: campaignName, platform, source: 'manual', dataSourceLabel: 'Manuel Giriş' },
+        }));
+
+      await tx.dailyMetric.create({
+        data: {
+          userId,
+          brandId,
+          campaignId: campaign.id,
+          uploadId: log.id,
+          date: new Date(`${date}T00:00:00.000Z`),
+          platform,
+          spend,
+          revenue,
+          impressions,
+          clicks,
+          conversions,
+          ctr: clicks !== null && impressions ? (clicks / impressions) * 100 : undefined,
+          cpc: spend !== null && clicks ? spend / clicks : undefined,
+          roas: revenue !== null && spend ? revenue / spend : undefined,
+          source: 'manual',
+          dataSourceLabel: 'Manuel Giriş',
+        },
+      });
+    });
 
     return NextResponse.json({
       success: true,

@@ -3,17 +3,6 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-const DEMO_ADMIN = {
-  id: 'admin-demo-user',
-  email: 'admin@markarapor.com',
-  name: 'Admin',
-  isAdmin: true,
-  companyName: 'MarkaRapor Admin',
-} as const;
-// Demo admin yalnizca acikca izin verilirse (DEMO_ADMIN_ENABLED="true") ve production disinda calisir.
-// Veritabanina yazilmaz; demo verileri bellekte tutulur (lib/demo-data.ts).
-const demoAdminEnabled = process.env.NODE_ENV !== 'production' && process.env.DEMO_ADMIN_ENABLED === 'true';
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   session: { strategy: 'jwt' },
@@ -32,12 +21,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const email = String(credentials.email).toLowerCase().trim();
         const password = String(credentials.password);
-        const isAdminLogin = email === 'admin@markarapor.com' && password === 'Admin123';
-
-        if (isAdminLogin && demoAdminEnabled) {
-          return DEMO_ADMIN as any;
-        }
-
         let user: any = null;
         try {
           user = await prisma.user.findUnique({ where: { email } });

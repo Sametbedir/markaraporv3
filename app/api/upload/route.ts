@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
-import { addDemoUpload, demoUploads } from '@/lib/demo-data';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { AdRow } from '@/lib/import/ad-report';
 import { ParsedFile, SUPPORTED_EXTENSIONS, parseUploadedFile } from '@/lib/import/file';
@@ -48,7 +47,7 @@ function describeReport(parsed: ParsedFile) {
 
 const ratio = (a: number | null, b: number | null, factor = 1) => (a !== null && b ? (a / b) * factor : undefined);
 
-async function persist(userId: string, fileName: string, ext: string, fileHash: string, parsed: ParsedFile) {
+async function persist(userId: string, brandId: string, fileName: string, ext: string, fileHash: string, parsed: ParsedFile) {
   const { report } = parsed;
   const label = `Yüklenen ${ext.toUpperCase()}`;
   const platforms = [...new Set(report.rows.map((r) => r.platform ?? DEFAULT_PLATFORM))];
@@ -58,6 +57,7 @@ async function persist(userId: string, fileName: string, ext: string, fileHash: 
       const log = await tx.uploadLog.create({
         data: {
           userId,
+          brandId,
           fileName,
           fileType: ext.toUpperCase(),
           kind: 'ad_report',
@@ -78,8 +78,8 @@ async function persist(userId: string, fileName: string, ext: string, fileHash: 
       for (const key of new Set(report.rows.map(campaignKey))) {
         const [platform, name] = JSON.parse(key) as [string, string];
         const campaign =
-          (await tx.campaign.findFirst({ where: { userId, name, platform } })) ??
-          (await tx.campaign.create({ data: { userId, name, platform, source: 'upload', dataSourceLabel: label } }));
+          (await tx.campaign.findFirst({ where: { brandId, name, platform } })) ??
+          (await tx.campaign.create({ data: { userId, brandId, name, platform, source: 'upload', dataSourceLabel: label } }));
         campaignIds.set(key, campaign.id);
       }
 
@@ -94,13 +94,14 @@ async function persist(userId: string, fileName: string, ext: string, fileHash: 
       let replacedRows = 0;
       for (const [campaignId, dates] of datesByCampaign) {
         const deleted = await tx.dailyMetric.deleteMany({
-          where: { userId, campaignId, source: 'upload', date: { in: dates } },
+          where: { brandId, campaignId, source: 'upload', date: { in: dates } },
         });
         replacedRows += deleted.count;
       }
 
       const data = report.rows.map((r) => ({
         userId,
+        brandId,
         campaignId: campaignIds.get(campaignKey(r))!,
         uploadId: log.id,
         date: new Date(`${r.date}T00:00:00.000Z`),
@@ -134,9 +135,9 @@ async function persist(userId: string, fileName: string, ext: string, fileHash: 
    MAIN HANDLER
 ═══════════════════════════════════════════════════════════════ */
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id)
-    return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 401 });
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { userId, brandId } = ctx;
 
   try {
     const formData = await req.formData();
@@ -180,10 +181,6 @@ export async function POST(req: NextRequest) {
       );
 
     const { report } = parsed;
-    const userId = session.user.id;
-    const isDemo = userId === 'admin-demo-user';
-    let replacedRows = 0;
-    let platforms = [...new Set(report.rows.map((r) => r.platform ?? DEFAULT_PLATFORM))];
 
     const fileHash = createHash('sha256').update(Buffer.from(buffer)).digest('hex');
     const duplicateError = (fileName: string, createdAt: Date) =>
@@ -195,55 +192,23 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
 
-    if (isDemo) {
-      // Demo modu bellekte çalışır; eksik değerler yalnızca burada 0 olarak tutulur ve mağaza siparişi üretilmez.
-      const previous = demoUploads.find((u) => u.fileHash === fileHash);
-      if (previous) return duplicateError(previous.fileName, new Date(previous.createdAt));
-      addDemoUpload(
-        {
-          fileName: file.name,
-          fileType: ext.toUpperCase(),
-          kind: 'ad_report',
-          fileHash,
-          currency: report.currency,
-          importedRows: report.rows.length,
-          dateStart: report.dateStart,
-          dateEnd: report.dateEnd,
-          platforms: JSON.stringify(platforms),
-        },
-        report.rows.map((r) => ({
-          date: r.date,
-          platform: r.platform ?? DEFAULT_PLATFORM,
-          campaign: r.campaign ?? DEFAULT_CAMPAIGN,
-          spend: r.spend ?? 0,
-          revenue: r.conversionValue ?? 0,
-          orders: 0,
-          impressions: r.impressions ?? 0,
-          clicks: r.clicks ?? 0,
-          conversions: r.conversions ?? 0,
-        }))
-      );
-    } else {
-      const previous = await prisma.uploadLog.findFirst({
-        where: { userId, fileHash, status: 'success' },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (previous) return duplicateError(previous.fileName, previous.createdAt);
+    // Aynı dosya aynı markaya ikinci kez yüklenemez; başka bir markaya yüklenebilir
+    const previous = await prisma.uploadLog.findFirst({
+      where: { brandId, fileHash, status: 'success' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (previous) return duplicateError(previous.fileName, previous.createdAt);
 
-      const saved = await persist(userId, file.name, ext, fileHash, parsed);
-      replacedRows = saved.replacedRows;
-      platforms = saved.platforms;
-    }
-
+    const { replacedRows, platforms } = await persist(userId, brandId, file.name, ext, fileHash, parsed);
     const replacedNote = replacedRows ? ` Daha önce yüklenmiş ${replacedRows} kampanya-gün satırı yenileriyle değiştirildi.` : '';
     return NextResponse.json({
       success: true,
-      message: `"${file.name}" işlendi: ${report.rows.length} kampanya-gün satırı aktarıldı.${replacedNote}`,
+      message: `"${file.name}" ${ctx.brand.name} markasına işlendi: ${report.rows.length} kampanya-gün satırı aktarıldı.${replacedNote}`,
       filename: file.name,
       size: file.size,
       importedRows: report.rows.length,
       replacedRows,
-      storage: isDemo ? 'demo-memory' : 'database',
+      brand: ctx.brand.name,
       dateStart: report.dateStart,
       dateEnd: report.dateEnd,
       platforms,

@@ -1,17 +1,15 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 
 export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-  if (session.user.id === 'admin-demo-user') {
-    return NextResponse.json({ error: 'Demo modunda iKas entegrasyonu kullanılamaz. Veritabanı bağlı gerçek bir hesapla giriş yapın.' }, { status: 400 });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { userId, brandId } = ctx;
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
 
   if (!user?.ikasStoreUrl || !user?.ikasAccessToken) {
     return NextResponse.json({ error: 'iKas ayarları yapılandırılmamış' }, { status: 400 });
@@ -52,13 +50,14 @@ export async function POST() {
 
     for (const o of orders) {
       const existing = await prisma.order.findFirst({
-        where: { userId: session.user.id, externalId: String(o.id), channel: 'ikas' },
+        where: { brandId, externalId: String(o.id), channel: 'ikas' },
       });
       if (existing) continue;
 
       await prisma.order.create({
         data: {
-          userId: session.user.id,
+          userId,
+          brandId,
           externalId: String(o.id),
           totalPrice: Number(o.totalPrice ?? 0),
           channel: 'ikas',

@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
+import BrandSwitcher from '@/components/brand-switcher';
 import {
   LayoutDashboard, Upload, Activity, Settings, LogOut,
-  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText,
+  BarChart3, Menu, X, ChevronRight, Target, Calculator, Compass, Swords, FileText, Store,
 } from 'lucide-react';
 
 interface SidebarLayoutProps {
@@ -27,6 +28,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
     { href: '/simulation', label: 'Simülatör', icon: Calculator },
     { href: '/upload', label: 'Veri Yükle', icon: Upload },
     { href: '/uptime', label: 'Uptime Takibi', icon: Activity },
+    { href: '/brands', label: 'Markalar', icon: Store },
     { href: '/settings', label: 'Ayarlar', icon: Settings },
   ];
 
@@ -59,11 +61,11 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-20 h-full w-64 bg-card/95 backdrop-blur-xl border-r border-border
+        className={`fixed top-0 left-0 z-20 h-full w-64 flex flex-col bg-card/95 backdrop-blur-xl border-r border-border
           transform transition-all duration-300 ease-in-out lg:translate-x-0
           ${sidebarOpen ? 'translate-x-0 shadow-lg' : '-translate-x-full'}`}
       >
-        <div className="relative p-6 border-b border-border overflow-hidden">
+        <div className="relative p-6 border-b border-border overflow-hidden shrink-0">
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
           <div className="relative z-10 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-primary">
@@ -71,16 +73,12 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
             </div>
             <div>
               <span className="text-lg font-bold text-foreground">MarkaRapor</span>
-              {session?.user && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {(session.user as any)?.companyName || session.user?.name}
-                </p>
-              )}
             </div>
           </div>
+          {session?.user && <BrandSwitcher onNavigate={() => setSidebarOpen(false)} />}
         </div>
 
-        <nav className="p-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
           {navItems.map((item) => {
             const active = isActive(item.href);
             return (
@@ -106,7 +104,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border bg-card/50">
+        <div className="shrink-0 p-4 border-t border-border bg-card/50">
           {session?.user && (
             <div className="px-4 py-2 mb-2">
               <p className="text-xs text-muted-foreground">Giriş yapan</p>

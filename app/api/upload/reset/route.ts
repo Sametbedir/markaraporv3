@@ -1,9 +1,8 @@
 ﻿export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
-import { resetDemoData } from '@/lib/demo-data';
 
 export async function POST(_req: NextRequest) {
   return handleReset();
@@ -14,32 +13,24 @@ export async function DELETE(_req: NextRequest) {
 }
 
 async function handleReset() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 401 });
-  }
-
-  const userId = session.user.id;
-
-  if (userId === 'admin-demo-user') {
-    resetDemoData();
-    return NextResponse.json({ success: true, message: 'Demo verileri sıfırlandı.' });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
 
   // Yalnızca dosya yüklemesi ve manuel girişle gelen veriler silinir; iKas/Ticimax gibi API kaynakları korunur.
   const fileSources = { in: ['upload', 'manual'] };
 
   try {
     await prisma.$transaction([
-      prisma.dailyMetric.deleteMany({ where: { userId, source: fileSources } }),
-      prisma.order.deleteMany({ where: { userId, source: fileSources } }),
-      prisma.campaign.deleteMany({ where: { userId, source: fileSources, dailyMetrics: { none: {} } } }),
-      prisma.uploadLog.deleteMany({ where: { userId } }),
+      prisma.dailyMetric.deleteMany({ where: { brandId, source: fileSources } }),
+      prisma.order.deleteMany({ where: { brandId, source: fileSources } }),
+      prisma.campaign.deleteMany({ where: { brandId, source: fileSources, dailyMetrics: { none: {} } } }),
+      prisma.uploadLog.deleteMany({ where: { brandId } }),
     ]);
 
     return NextResponse.json({
       success: true,
-      message: 'Dosyayla ve manuel olarak yüklenen tüm veriler sıfırlandı. API entegrasyonlarından gelen siparişler korundu.',
+      message: `${ctx.brand.name}: dosyayla ve manuel olarak yüklenen tüm veriler sıfırlandı. API entegrasyonlarından gelen siparişler korundu.`,
     });
   } catch (error: any) {
     console.error('Veri sıfırlanırken hata:', error);

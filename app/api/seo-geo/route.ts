@@ -1,16 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { generateSeoGeoReport, SeoGeoRequest } from '@/lib/seo-geo';
 
 export async function POST(req: NextRequest) {
   // AI kotası harcayan bir uç nokta; yalnızca giriş yapmış kullanıcılar kullanabilir
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 401 });
-  }
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
 
   try {
     const body = (await req.json()) as SeoGeoRequest;
@@ -32,20 +30,19 @@ export async function POST(req: NextRequest) {
 
     let savedId: string | null = null;
     try {
-      if (session.user.id !== 'admin-demo-user') {
-        const saved = await prisma.manualEntry.create({
-          data: {
-            userId: session.user.id,
-            entryType: 'seo_geo_report',
-            entryCategory: body.platform || 'ikas',
-            dataJson: JSON.stringify(report),
-            fileName: `${body.niche} - ${body.location}`,
-            fileType: 'seo_geo_json',
-            status: 'completed',
-          },
-        });
-        savedId = saved.id;
-      }
+      const saved = await prisma.manualEntry.create({
+        data: {
+          userId: ctx.userId,
+          brandId: ctx.brandId,
+          entryType: 'seo_geo_report',
+          entryCategory: body.platform || 'ikas',
+          dataJson: JSON.stringify(report),
+          fileName: `${body.niche} - ${body.location}`,
+          fileType: 'seo_geo_json',
+          status: 'completed',
+        },
+      });
+      savedId = saved.id;
     } catch (dbErr) {
       console.warn('Rapor veritabanına kaydedilirken atlandı:', dbErr);
     }
@@ -66,14 +63,12 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ reports: [] });
-    }
+    const ctx = await requireBrand();
+    if (ctx instanceof NextResponse) return ctx;
 
     const entries = await prisma.manualEntry.findMany({
       where: {
-        userId: session.user.id,
+        brandId: ctx.brandId,
         entryType: 'seo_geo_report',
       },
       orderBy: { createdAt: 'desc' },

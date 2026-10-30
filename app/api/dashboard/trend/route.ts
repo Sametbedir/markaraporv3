@@ -1,29 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { LEGACY_SYNTHETIC_ORDER_SOURCE } from '@/lib/store-orders';
-import { demoMetricsInRange } from '@/lib/demo-data';
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
-  if (session.user.id === 'admin-demo-user') {
-    const url = new URL(req.url);
-    const metrics = demoMetricsInRange(url.searchParams.get('start_date'), url.searchParams.get('end_date'));
-    const grouped = new Map<string, typeof metrics[number]>();
-    for (const metric of metrics) {
-      const current = grouped.get(metric.date) ?? { ...metric, spend: 0, revenue: 0, orders: 0, impressions: 0, clicks: 0, conversions: 0 };
-      current.spend += metric.spend; current.revenue += metric.revenue; current.orders += metric.orders;
-      current.impressions += metric.impressions; current.clicks += metric.clicks; current.conversions += metric.conversions;
-      grouped.set(metric.date, current);
-    }
-    return NextResponse.json([...grouped.values()].sort((a, b) => a.date.localeCompare(b.date)).map((metric) => ({
-      ...metric, roas: metric.spend ? metric.revenue / metric.spend : 0,
-    })));
-  }
-
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
   const url = new URL(req.url);
   const startDate = url.searchParams.get('start_date');
   const endDate = url.searchParams.get('end_date');
@@ -31,18 +16,17 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const end = endDate ? new Date(endDate) : now;
   const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 86400000);
-  const userId = session.user.id;
 
   const metrics = await prisma.dailyMetric.groupBy({
     by: ['date'],
-    where: { userId, date: { gte: start, lte: end } },
+    where: { brandId, date: { gte: start, lte: end } },
     _sum: { spend: true, revenue: true, impressions: true, clicks: true },
     orderBy: { date: 'asc' },
   });
 
   const orders = await prisma.$queryRaw<Array<{ d: string; cnt: number }>>`
     SELECT DATE(order_date) as d, COUNT(*)::int as cnt
-    FROM orders WHERE user_id = ${userId}
+    FROM orders WHERE brand_id = ${brandId}
       AND source <> ${LEGACY_SYNTHETIC_ORDER_SOURCE}
       AND order_date >= ${start} AND order_date <= ${end}
     GROUP BY DATE(order_date) ORDER BY d`;

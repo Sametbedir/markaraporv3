@@ -1,19 +1,20 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireBrand } from '@/lib/brand';
 import { prisma } from '@/lib/prisma';
 import { validateMonitorUrl } from '@/lib/safe-url';
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Yetkisiz' }, { status: 401 });
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  const { brandId } = ctx;
   const body = await req.json().catch(() => ({}));
   const id = String(body?.id ?? body?.monitor_id ?? '');
   if (!id) return NextResponse.json({ error: 'Monitör kimliği gereklidir' }, { status: 400 });
 
   const monitor = await prisma.uptimeMonitor.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, brandId },
   });
   if (!monitor) return NextResponse.json({ error: 'Monitör bulunamadı' }, { status: 404 });
 
