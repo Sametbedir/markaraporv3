@@ -68,6 +68,10 @@ describe('kontrol', () => {
     const r = await checkHttp('http://127.0.0.1:5432', 2);
     expect(r).toMatchObject({ status: 'down', errorType: 'invalid_url' });
   });
+  it('çözümlenemeyen alan adı "erişilemiyor (DNS)" sayılır, geçersiz adres değil', async () => {
+    const r = await checkHttp('https://bu-alan-adi-kesinlikle-yok-markarapor.invalid', 2);
+    expect(r).toMatchObject({ status: 'down', errorType: 'dns', errorMessage: 'Alan adı çözümlenemedi (DNS)' });
+  });
   it('zamanlama: vadesi gelen ve gelmeyen monitör', () => {
     expect(isDue({ lastCheckedAt: null, intervalSeconds: 300 }, t0)).toBe(true);
     expect(isDue({ lastCheckedAt: at(-4), intervalSeconds: 300 }, t0)).toBe(false);

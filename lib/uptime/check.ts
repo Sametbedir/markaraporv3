@@ -6,7 +6,7 @@
 import tls from 'node:tls';
 import type { UptimeMonitor } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { validateMonitorUrl } from '@/lib/safe-url';
+import { DnsLookupError, validateMonitorUrl } from '@/lib/safe-url';
 
 const SSL_RECHECK_MS = 12 * 60 * 60 * 1000;
 const USER_AGENT = 'MarkaRapor-UptimeMonitor/1.0';
@@ -42,6 +42,9 @@ export async function checkHttp(url: string, timeoutSeconds: number): Promise<Ht
   try {
     safeUrl = await validateMonitorUrl(url);
   } catch (e: any) {
+    if (e instanceof DnsLookupError) {
+      return { status: 'down', statusCode: null, responseTimeMs: null, errorType: 'dns', errorMessage: 'Alan adı çözümlenemedi (DNS)' };
+    }
     return { status: 'down', statusCode: null, responseTimeMs: null, errorType: 'invalid_url', errorMessage: e?.message ?? 'Geçersiz adres' };
   }
   const started = Date.now();
@@ -99,6 +102,7 @@ export async function runMonitorCheck(monitor: UptimeMonitor, { forceSsl = false
   const wantsSsl =
     monitor.url.startsWith('https://') &&
     http.errorType !== 'invalid_url' &&
+    http.errorType !== 'dns' &&
     (forceSsl || !monitor.sslCheckedAt || now.getTime() - monitor.sslCheckedAt.getTime() > SSL_RECHECK_MS);
   const ssl = wantsSsl ? await checkSsl(monitor.url, monitor.timeoutSeconds) : null;
 

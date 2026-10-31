@@ -18,6 +18,9 @@ function isPrivateAddress(address: string) {
   return normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:') || normalized.startsWith('::ffff:192.168.') || normalized.startsWith('::ffff:10.');
 }
 
+/** Alan adı çözümlenemedi; adres geçersiz değil, site (şu an) erişilemez. */
+export class DnsLookupError extends Error {}
+
 export async function validateMonitorUrl(rawUrl: string) {
   let parsed: URL;
   try {
@@ -35,7 +38,12 @@ export async function validateMonitorUrl(rawUrl: string) {
     throw new Error('Bu adres izlenemez');
   }
 
-  const addresses = net.isIP(hostname) ? [hostname] : (await dns.lookup(hostname, { all: true })).map((result) => result.address);
+  let addresses: string[];
+  try {
+    addresses = net.isIP(hostname) ? [hostname] : (await dns.lookup(hostname, { all: true })).map((result) => result.address);
+  } catch {
+    throw new DnsLookupError(`"${hostname}" alan adı bulunamadı (DNS). Adresi kontrol edin.`);
+  }
   if (!addresses.length || addresses.some(isPrivateAddress)) throw new Error('Yerel veya özel ağ adresleri izlenemez');
   return parsed.toString().replace(/\/$/, '');
 }
