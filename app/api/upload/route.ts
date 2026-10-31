@@ -50,6 +50,9 @@ function describeReport(parsed: ParsedFile) {
    KAYIT
 ═══════════════════════════════════════════════════════════════ */
 
+const chunk = <T,>(list: T[], size: number): T[][] =>
+  Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
+
 const ratio = (a: number | null, b: number | null, factor = 1) => (a !== null && b ? (a / b) * factor : undefined);
 
 async function persist(userId: string, brandId: string, fileName: string, ext: string, fileHash: string, parsed: ParsedFile) {
@@ -77,15 +80,30 @@ async function persist(userId: string, brandId: string, fileName: string, ext: s
         },
       });
 
-      // Kampanyaları (platform + ad) bul veya oluştur
+      // Kampanyaları (platform + ad) bul veya oluştur. Veritabanı uzak olabileceği için (her sorgu
+      // ~0,3 sn) kampanya başına sorgu yerine toplu sorgular kullanılır.
       const campaignKey = (r: AdRow) => JSON.stringify([r.platform ?? DEFAULT_PLATFORM, r.campaign ?? DEFAULT_CAMPAIGN]);
+      const keyOf = (platform: string, name: string) => JSON.stringify([platform, name]);
+      const wanted = [...new Set(report.rows.map(campaignKey))].map((k) => JSON.parse(k) as [string, string]);
       const campaignIds = new Map<string, string>();
-      for (const key of new Set(report.rows.map(campaignKey))) {
-        const [platform, name] = JSON.parse(key) as [string, string];
-        const campaign =
-          (await tx.campaign.findFirst({ where: { brandId, name, platform } })) ??
-          (await tx.campaign.create({ data: { userId, brandId, name, platform, source: 'upload', dataSourceLabel: label } }));
-        campaignIds.set(key, campaign.id);
+      const lookup = async (pairs: [string, string][]) => {
+        for (const group of chunk(pairs, 500)) {
+          const found = await tx.campaign.findMany({
+            where: { brandId, OR: group.map(([platform, name]) => ({ platform, name })) },
+            select: { id: true, name: true, platform: true },
+            orderBy: { createdAt: 'asc' },
+          });
+          // Aynı adda birden çok kayıt varsa en eskisi kullanılır (önceki davranışla aynı)
+          for (const c of found) if (!campaignIds.has(keyOf(c.platform, c.name))) campaignIds.set(keyOf(c.platform, c.name), c.id);
+        }
+      };
+      await lookup(wanted);
+      const missing = wanted.filter(([platform, name]) => !campaignIds.has(keyOf(platform, name)));
+      if (missing.length) {
+        await tx.campaign.createMany({
+          data: missing.map(([platform, name]) => ({ userId, brandId, name, platform, source: 'upload', dataSourceLabel: label })),
+        });
+        await lookup(missing);
       }
 
       // Daha önce dosyayla yüklenmiş aynı kampanya-gün satırlarını yenileriyle değiştir (son yükleme geçerlidir)
@@ -97,12 +115,11 @@ async function persist(userId: string, brandId: string, fileName: string, ext: s
         datesByCampaign.set(id, list);
       }
       let replacedRows = 0;
-      for (const [campaignId, dates] of datesByCampaign) {
-        const deleted = await tx.dailyMetric.deleteMany({
-          where: { brandId, campaignId, source: 'upload', date: { in: dates } },
-        });
+      for (const group of chunk([...datesByCampaign], 200)) {
+        const or = group.map(([campaignId, dates]) => ({ campaignId, date: { in: dates } }));
+        const deleted = await tx.dailyMetric.deleteMany({ where: { brandId, source: 'upload', OR: or } });
         replacedRows += deleted.count;
-        await tx.customMetricValue.deleteMany({ where: { brandId, campaignId, date: { in: dates } } });
+        await tx.customMetricValue.deleteMany({ where: { brandId, OR: or } });
       }
 
       const data = report.rows.map((r) => ({
@@ -151,17 +168,17 @@ async function persist(userId: string, brandId: string, fileName: string, ext: s
         await tx.customMetricValue.createMany({ data: customData.slice(i, i + 1000) });
       }
       // Yeni özel metrik tanımı oluştur; var olanın adı/biçimi kullanıcının ayarıdır, değiştirilmez
-      for (const c of report.customColumns) {
-        await tx.metricDefinition.upsert({
-          where: { brandId_key: { brandId, key: c.key } },
-          create: { brandId, key: c.key, label: c.label, kind: 'custom' },
-          update: {},
+      if (report.customColumns.length) {
+        await tx.metricDefinition.createMany({
+          data: report.customColumns.map((c) => ({ brandId, key: c.key, label: c.label, kind: 'custom' })),
+          skipDuplicates: true,
         });
       }
 
       return { replacedRows, platforms };
     },
-    { maxWait: 10_000, timeout: 60_000 }
+    // Büyük dosyalarda uzak veritabanına yazmak zaman alabilir
+    { maxWait: 15_000, timeout: 180_000 }
   );
 }
 
