@@ -232,17 +232,7 @@ export default function DashboardClient() {
 
           {/* Yapay Zeka Analiz Asistanı — yalnızca gerçek özet verisiyle çalışır */}
           {!loading && summary && (
-            <AIAnalizKarti
-              dashboardVerileri={{
-                toplamHarcama: summary.total_spend,
-                toplamCiro: summary.total_revenue,
-                netKar: summary.total_profit,
-                siparis: summary.total_orders,
-                roas: summary.avg_roas,
-                netRoas: summary.net_roas,
-                karMarji: `${summary.profit_margin}%`,
-              }}
-            />
+            <AIAnalizKarti {...getRange()} />
           )}
         </>
       )}

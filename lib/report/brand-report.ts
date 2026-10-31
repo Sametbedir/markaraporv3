@@ -69,14 +69,22 @@ export async function availableMonths(brandId: string): Promise<string[]> {
   return rows.map((r) => r.m);
 }
 
-export async function buildBrandMonthReport(
-  brand: { id: string; currency: string; reportKpis: string | null },
-  month: string
+type BrandRef = { id: string; currency: string; reportKpis: string | null };
+
+export async function buildBrandMonthReport(brand: BrandRef, month: string): Promise<BrandMonthReport> {
+  const { start, end } = monthRange(month);
+  return buildBrandRangeReport(brand, { start, end }, monthRange(previousMonth(month)), month);
+}
+
+/** Herhangi bir tarih aralığı ve karşılaştırma dönemi için aynı rapor (dashboard AI analizi kullanır). */
+export async function buildBrandRangeReport(
+  brand: BrandRef,
+  { start, end }: { start: string; end: string },
+  prev: { start: string; end: string },
+  month = start.slice(0, 7)
 ): Promise<BrandMonthReport> {
   const brandId = brand.id;
   const fallbackCurrency = brand.currency;
-  const { start, end } = monthRange(month);
-  const prev = monthRange(previousMonth(month));
   const range = { gte: utc(start), lte: utc(end) };
 
   const [defs, customCur, customPrev] = await Promise.all([

@@ -13,7 +13,7 @@ import {
 
 export * from './seo-geo-strategy';
 // lib/seo-geo.ts
-import { GoogleGenAI } from '@google/genai';
+import { AiUnavailableError, HONESTY_RULES, aiConfigured, generate } from '@/lib/ai/gemini';
 
 export interface SeoGeoRequest {
   platform: 'ikas' | 'ticimax' | 'ideasoft' | 'shopify' | string;
@@ -124,13 +124,6 @@ export interface SeoGeoReportResult {
   source: 'gemini-ai' | 'expert-engine';
 }
 
-const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
-  'gemini-flash-latest',
-  'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
-];
 
 /**
  * AI (Gemini) ile SEO/GEO raporu üretir. AI kullanılamazsa null döner; hazır şablonla uydurma rapor üretilmez.
@@ -141,10 +134,8 @@ export async function generateSeoGeoReport(input: SeoGeoRequest): Promise<SeoGeo
   const location = input.location?.trim() || 'Türkiye Geneli';
   const websiteUrl = input.websiteUrl?.trim() || '';
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (apiKey) {
+  if (aiConfigured()) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
       const prompt = `
 Sen Türkiye ve küresel e-ticaret pazarlarında uzmanlaşmış kıdemli bir SEO & GEO (Coğrafi Arama Optimizasyonu) Danışmanısın.
 Aşağıdaki e-ticaret markası için KESİN VE NET, AKSİYON ODAKLI BİR MARKA RAPORU üret.
@@ -230,25 +221,14 @@ RAPOR FORMATI (JSON formatında yanıt ver):
 Sadece saf JSON çıktısı döndür, markdown ekleme.
 `;
 
-      for (const modelName of CANDIDATE_MODELS) {
-        try {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-          });
-
-          if (response?.text) {
-            const parsed = extractJson(response.text);
-            if (parsed && parsed.singleSentenceSummary) {
-              return formatAiReport(parsed, input, 'gemini-ai');
-            }
-          }
-        } catch (e) {
-          // try next model
-        }
+      // Uzun strateji raporu: en güçlü ücretsiz model (derin kademe), JSON çıktısı
+      const response = await generate({ tier: 'deep', json: true, system: `Sen kıdemli bir SEO & GEO danışmanısın.\n${HONESTY_RULES}`, prompt });
+      const parsed = extractJson(response.text);
+      if (parsed && parsed.singleSentenceSummary) {
+        return formatAiReport(parsed, input, 'gemini-ai');
       }
     } catch (e) {
-      console.warn('Gemini AI fallback:', e);
+      if (!(e instanceof AiUnavailableError)) console.warn('Gemini SEO/GEO hatası:', e);
     }
   }
 

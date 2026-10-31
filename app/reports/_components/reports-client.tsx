@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileText, Send, EyeOff, ExternalLink, CheckCircle2, Loader2 } from 'lucide-react';
+import { FileText, Send, EyeOff, ExternalLink, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import ReportDocument from '@/components/report-document';
 import type { ReportDocumentData } from '@/lib/report/document';
@@ -24,6 +24,8 @@ export default function ReportsClient() {
   const [actions, setActions] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [publishing, setPublishing] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftModel, setDraftModel] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = searchParams.get('ay') ?? months?.[0]?.month ?? null;
@@ -114,6 +116,27 @@ export default function ReportsClient() {
     await Promise.all([loadMonths(), loadDetail(selected)]);
   };
 
+  /** AI taslağı yalnızca forma yazılır; düzenleyip kaydetmek ve yayınlamak kullanıcıdadır */
+  const aiDraft = async () => {
+    if (!selected) return;
+    if ((summary.trim() || actions.trim()) && !confirm('Mevcut değerlendirme ve aksiyon planı AI taslağıyla değiştirilsin mi?')) return;
+    setDrafting(true);
+    const res = await fetch(`/api/reports/${selected}/ai-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fresh: !!draftModel }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => null);
+    setDrafting(false);
+    if (!res?.ok) {
+      toast.error(data?.error ?? 'AI taslağı oluşturulamadı');
+      return;
+    }
+    setDraftModel(data.model);
+    onText(data.summary, data.actions);
+    toast.success('AI taslağı forma eklendi; kontrol edip düzenleyin');
+  };
+
   const openPreview = async (published: boolean) => {
     await flushSave();
     window.open(`/reports/${selected}/print${published ? '?surum=yayin' : ''}`, '_blank', 'noopener');
@@ -201,6 +224,17 @@ export default function ReportsClient() {
                 </div>
 
                 <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+                  <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 space-y-2">
+                    <button onClick={aiDraft} disabled={drafting || !row.has_data} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50">
+                      {drafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {drafting ? 'Taslak hazırlanıyor…' : draftModel ? 'AI ile yeniden yaz' : 'AI ile taslak oluştur'}
+                    </button>
+                    <p className="text-[11px] text-muted-foreground">
+                      Ayın verilerinden değerlendirme ve aksiyon planı taslağı yazar; yalnızca rapordaki sayıları kullanır. Göndermeden önce okuyup düzenleyin.
+                      Ücretsiz Gemini kullanılır: marka adı gönderilmez, toplu veriler Google tarafından ürün geliştirmede kullanılabilir.
+                      {draftModel ? ` (${draftModel})` : ''}
+                    </p>
+                  </div>
                   <div>
                     <label htmlFor="report-summary" className="text-sm font-medium text-foreground">Değerlendirme</label>
                     <p className="text-xs text-muted-foreground">Ayın genel yorumu. Rapordaki &quot;Öne çıkanlar&quot; maddeleri sayılardan otomatik çıkar; burada kendi yorumunuzu yazın.</p>

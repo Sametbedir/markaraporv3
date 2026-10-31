@@ -1,5 +1,5 @@
 // lib/competitor-analysis.ts — Strategic Competition & Funnel Intelligence Engine
-import { GoogleGenAI } from '@google/genai';
+import { AiUnavailableError, HONESTY_RULES, aiConfigured, generate } from '@/lib/ai/gemini';
 
 export interface CompetitorAnalysisRequest {
   ownBrandName: string;
@@ -98,13 +98,6 @@ export interface CompetitorReportResult {
   source: 'gemini-ai' | 'expert-engine';
 }
 
-const CANDIDATE_MODELS = [
-  'gemini-3.1-flash-lite',
-  'gemini-flash-latest',
-  'gemini-3.7-flash',
-  'gemini-3.8-flash',
-  'gemini-3.5-flash',
-];
 
 /**
  * AI (Gemini) ile rakip raporu üretir. AI kullanılamazsa null döner; hazır şablonla
@@ -122,33 +115,22 @@ export async function generateCompetitorReport(
   const rawData = input.rawLibraryData?.trim() || '';
   const niche = input.niche?.trim() || 'E-Ticaret';
 
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (apiKey) {
+  if (aiConfigured()) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const systemInstruction = buildSystemPrompt(ownBrandName, competitorBrandName, ownUrl, competitorUrl, ownIg, competitorIg, niche, rawData);
-
-      for (const modelName of CANDIDATE_MODELS) {
-        try {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            config: { systemInstruction },
-            contents: `Lütfen ${ownBrandName} ve ${competitorBrandName} markalarını kıyaslayan Stratejik Rekabet ve Huni Raporu JSON çıktısını oluştur.`,
-          });
-
-          if (response?.text) {
-            const parsed = extractJson(response.text);
-            if (parsed && parsed.brandPositioning) {
-              return assembleReport(parsed, input, 'gemini-ai');
-            }
-          }
-        } catch {
-          // Next model
-        }
+      const system = `${buildSystemPrompt(ownBrandName, competitorBrandName, ownUrl, competitorUrl, ownIg, competitorIg, niche, rawData)}\n${HONESTY_RULES}`;
+      // Strateji raporu: en güçlü ücretsiz model (derin kademe), JSON çıktısı
+      const response = await generate({
+        tier: 'deep',
+        json: true,
+        system,
+        prompt: `Lütfen ${ownBrandName} ve ${competitorBrandName} markalarını kıyaslayan Stratejik Rekabet ve Huni Raporu JSON çıktısını oluştur.`,
+      });
+      const parsed = extractJson(response.text);
+      if (parsed && parsed.brandPositioning) {
+        return assembleReport(parsed, input, 'gemini-ai');
       }
     } catch (e) {
-      console.warn('Gemini AI Strategic Competitor fallback:', e);
+      if (!(e instanceof AiUnavailableError)) console.warn('Gemini rakip analizi hatası:', e);
     }
   }
 

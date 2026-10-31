@@ -1,35 +1,35 @@
-// app/api/ai-analiz/route.ts
-import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
-import { eTicaretDanismaniAnalizi } from '@/lib/gemini';
-
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ hata: 'Yetkisiz erişim.' }, { status: 401 });
-  }
+import { NextRequest, NextResponse } from 'next/server';
+import { requireBrand } from '@/lib/brand';
+import { buildBrandRangeReport } from '@/lib/report/brand-report';
+import { previousPeriod } from '@/lib/report/metrics';
+import { reportToAiContext } from '@/lib/ai/context';
+import { dashboardAnalysis } from '@/lib/ai/tasks';
+import { AiUnavailableError, aiConfigured } from '@/lib/ai/gemini';
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/** POST /api/ai-analiz { start_date, end_date, fresh? } — seçili dönemin AI analizi (aktif marka) */
+export async function POST(req: NextRequest) {
+  const ctx = await requireBrand();
+  if (ctx instanceof NextResponse) return ctx;
+  if (!aiConfigured()) return NextResponse.json({ hata: 'AI kapalı: .env dosyasında GEMINI_API_KEY tanımlı değil.' }, { status: 503 });
+
+  const body = await req.json().catch(() => null);
+  const start = String(body?.start_date ?? '');
+  const end = String(body?.end_date ?? '');
+  if (!ISO.test(start) || !ISO.test(end) || start > end) return NextResponse.json({ hata: 'Geçerli bir tarih aralığı seçin.' }, { status: 400 });
+
+  const report = await buildBrandRangeReport(ctx.brand, { start, end }, previousPeriod(start, end));
+  const aiCtx = reportToAiContext(report);
+  if (!aiCtx) return NextResponse.json({ hata: 'Bu dönemde analiz edilecek veri yok. Önce veri yükleyin veya tarih aralığını değiştirin.' }, { status: 400 });
 
   try {
-    const body = await request.json().catch(() => null);
-
-    // Tüm sayısal değerler 0 ise analiz edilecek gerçek veri yoktur; AI'a boş veri göndermiyoruz.
-    const sayisalDegerler = Object.values(body ?? {}).filter((v): v is number => typeof v === 'number');
-    if (!sayisalDegerler.some((v) => v !== 0)) {
-      return NextResponse.json({ hata: 'Analiz edilecek veri bulunamadı. Önce veri yükleyin.' }, { status: 400 });
-    }
-
-    const analizSonucu = await eTicaretDanismaniAnalizi(body);
-    if (!analizSonucu) {
-      return NextResponse.json(
-        { hata: 'AI servisi şu an kullanılamıyor (API anahtarı tanımlı değil veya servis yanıt vermedi). Dashboard metrikleriniz etkilenmez.' },
-        { status: 503 }
-      );
-    }
-
-    return NextResponse.json({ sonuc: analizSonucu });
-  } catch (error: any) {
-    return NextResponse.json({ hata: error.message || "Sunucu hatası" }, { status: 500 });
+    const res = await dashboardAnalysis(aiCtx, body?.fresh === true);
+    return NextResponse.json({ sonuc: res.text, model: res.model, onbellek: res.cached });
+  } catch (error) {
+    if (error instanceof AiUnavailableError) return NextResponse.json({ hata: error.message }, { status: 503 });
+    throw error;
   }
 }
