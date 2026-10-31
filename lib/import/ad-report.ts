@@ -219,7 +219,11 @@ export function parseAdReport(table: unknown[][], options: { mapping?: ColumnMap
     if (!row || row.every((c) => c === null || c === undefined || String(c).trim() === '')) return;
     const date = parseDate(row[columns.date!]);
     if (!date) {
-      if (isTotalRow(row)) issues.add('total_row', 'Toplam satırları atlandı (verinin iki kez sayılmaması için).', rowNumber);
+      // Meta "Raw Data Report" ilk satırda tarihsiz ve kampanya adsız bir toplam satırı verir
+      const blankDateAndCampaign =
+        String(row[columns.date!] ?? '').trim() === '' &&
+        (columns.campaign === undefined || String(row[columns.campaign] ?? '').trim() === '');
+      if (isTotalRow(row) || blankDateAndCampaign) issues.add('total_row', 'Toplam satırları atlandı (verinin iki kez sayılmaması için).', rowNumber);
       else issues.add('bad_date', 'Tarihi okunamayan satırlar atlandı.', rowNumber);
       return;
     }
@@ -284,7 +288,7 @@ export function parseAdReport(table: unknown[][], options: { mapping?: ColumnMap
       mergedRowCount++;
       for (const f of METRIC_FIELDS) {
         if ((existing[f] === null) !== (metrics[f] === null)) {
-          issues.add('partial_merge', 'Birleştirilen satırların bazılarında değer eksikti; toplam yalnızca mevcut değerlerden oluştu.', rowNumber);
+          issues.add('partial_merge', 'Birleştirilen satırların (örn. reklam düzeyi) bazı hücreleri boştu; boşlar 0 sayılmadı, toplam yalnızca dolu değerlerden oluştu.', rowNumber);
         }
         existing[f] = sumNullable(existing[f], metrics[f]);
       }

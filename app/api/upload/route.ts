@@ -8,6 +8,7 @@ import { AdRow } from '@/lib/import/ad-report';
 import { ParsedFile, SUPPORTED_EXTENSIONS, parseUploadedFile } from '@/lib/import/file';
 import { type ColumnRole, mappingFromRoles, templateFromColumns } from '@/lib/import/preview';
 import type { ColumnMapping } from '@/lib/import/ad-report';
+import { guessFormat } from '@/lib/metrics/catalog';
 import { FIELD_LABELS } from '@/lib/import/headers';
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -170,7 +171,7 @@ async function persist(userId: string, brandId: string, fileName: string, ext: s
       // Yeni özel metrik tanımı oluştur; var olanın adı/biçimi kullanıcının ayarıdır, değiştirilmez
       if (report.customColumns.length) {
         await tx.metricDefinition.createMany({
-          data: report.customColumns.map((c) => ({ brandId, key: c.key, label: c.label, kind: 'custom' })),
+          data: report.customColumns.map((c) => ({ brandId, key: c.key, label: c.label, kind: 'custom', format: guessFormat(c.label) })),
           skipDuplicates: true,
         });
       }

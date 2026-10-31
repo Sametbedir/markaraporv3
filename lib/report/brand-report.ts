@@ -17,7 +17,8 @@ export type BrandMonthReport = {
   end: string;
   current: ReportKpis | null;
   previous: ReportKpis | null;
-  trend: { date: string; spend: number; conversionValue: number }[];
+  /** conversions/clicks/impressions eski yayınlarda yoktur */
+  trend: { date: string; spend: number; conversionValue: number; conversions?: number; clicks?: number; impressions?: number }[];
   platforms: PlatformRow[];
   campaigns: CampaignPerformance[];
   /** Tek para birimi varsa o; birden fazlaysa null (karışık para birimi uyarısı gösterilir) */
@@ -90,7 +91,7 @@ export async function buildBrandMonthReport(
     prisma.dailyMetric.groupBy({
       by: ['date'],
       where: { brandId, date: range },
-      _sum: { spend: true, revenue: true },
+      _sum: { spend: true, revenue: true, conversions: true, clicks: true, impressions: true },
       orderBy: { date: 'asc' },
     }),
     prisma.dailyMetric.groupBy({
@@ -146,6 +147,9 @@ export async function buildBrandMonthReport(
       date: d.date.toISOString().slice(0, 10),
       spend: d._sum.spend ?? 0,
       conversionValue: d._sum.revenue ?? 0,
+      conversions: d._sum.conversions ?? 0,
+      clicks: d._sum.clicks ?? 0,
+      impressions: d._sum.impressions ?? 0,
     })),
     platforms: platformBreakdown(active),
     campaigns: active,

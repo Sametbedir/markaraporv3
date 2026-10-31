@@ -37,7 +37,9 @@ export type TablePreview = {
   signature: string;
 };
 
-const RATE_HEADER = /(\bper\b|başına|basina|başı|basi\b|ortalama|avg|average|\bort\b|oran|rate|ctr|cpc|cpm|cpa|roas|frequency|sıklık|siklik|%|\/)/i;
+const RATE_HEADER = /(\bper\b|başına|basina|başı|basi\b|ortalama|avg|average|\bort\b|oran|rate|ctr|cpc|cpm|cpa|roas|frequency|sıklık|siklik|\(\s*%\s*\)|\/)/i;
+/** Toplanmaması gereken sayısal sütunlar: kimlikler ve bütçeler */
+const NOT_A_METRIC = /(kod|code|\bid\b|kimli|bütçe|butce|budget)/i;
 const MAX_SCAN = 10;
 const SAMPLE_ROWS = 8;
 
@@ -94,7 +96,7 @@ export function previewTable(table: unknown[][]): TablePreview | null {
     let role: ColumnRole = { kind: 'ignore' };
     const field = fieldByIndex.get(index);
     if (field) role = { kind: 'field', field };
-    else if (numeric && header && !RATE_HEADER.test(header)) {
+    else if (numeric && header && !RATE_HEADER.test(header) && !NOT_A_METRIC.test(header)) {
       const key = metricKey(header);
       if (key && !usedKeys.has(key)) {
         usedKeys.add(key);

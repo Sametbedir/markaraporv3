@@ -3,11 +3,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Upload, FileText, FileSpreadsheet, CheckCircle2, AlertCircle,
-  X, Trash2, Clock, Calendar, RefreshCw, ChevronDown,
-  Database, HelpCircle, ArrowRight
+  X, Trash2, Clock, RefreshCw,
+  Database, ArrowRight
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import ManualEntry from './manual-entry';
 import ColumnMapper, { type PreviewColumn, type UploadPreview, mappingProblems } from './column-mapper';
 
 /* ─── Types ─── */
@@ -76,25 +77,6 @@ export default function UploadClient() {
   // Active view tab: 'manual' (default) or 'file'
   const [activeTab, setActiveTab] = useState<'manual' | 'file'>('manual');
 
-  /* ── Form Fields for "MANUEL VERİ YÜKLEME" ── */
-  const [veriTarihi, setVeriTarihi] = useState('');
-  const [veriKaynagi, setVeriKaynagi] = useState('Manuel Giriş');
-  const [kampanyaAdi, setKampanyaAdi] = useState('');
-  const [reklamSetiAdi, setReklamSetiAdi] = useState('');
-  const [reklamAdi, setReklamAdi] = useState('');
-  const [harcananTutar, setHarcananTutar] = useState('');
-  const [ciro, setCiro] = useState('');
-  const [gosterim, setGosterim] = useState('');
-  const [tiklama, setTiklama] = useState('');
-  const [yeniMusteri, setYeniMusteri] = useState('');
-  const [geriDonenMusteri, setGeriDonenMusteri] = useState('');
-
-  // Status & notifications
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-
   /* ── File upload state ── */
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -117,78 +99,6 @@ export default function UploadClient() {
   }, []);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
-
-  /* ── Form Reset / İptal ── */
-  const handleCancel = () => {
-    setVeriTarihi('');
-    setVeriKaynagi('Manuel Giriş');
-    setKampanyaAdi('');
-    setReklamSetiAdi('');
-    setReklamAdi('');
-    setHarcananTutar('');
-    setCiro('');
-    setGosterim('');
-    setTiklama('');
-    setYeniMusteri('');
-    setGeriDonenMusteri('');
-    setErrorMessage(null);
-    setIsSuccess(false);
-  };
-
-  /* ── Form Submit / Kaydet ── */
-  const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-
-    const metrikler = [harcananTutar, ciro, gosterim, tiklama, yeniMusteri, geriDonenMusteri];
-    if (metrikler.every((v) => !v.trim())) {
-      setErrorMessage('Lütfen en az bir metrik girin (harcama, ciro, gösterim, tıklama veya müşteri sayısı).');
-      return;
-    }
-
-    setSaving(true);
-    setErrorMessage(null);
-
-    const payload = {
-      date: veriTarihi || new Date().toISOString().split('T')[0],
-      platform: veriKaynagi || 'Manuel Giriş',
-      campaign: kampanyaAdi || `${veriKaynagi} Kampanyası`,
-      adGroup: reklamSetiAdi,
-      adName: reklamAdi,
-      // Ham metin gönderilir; sunucu boş alanı 0 değil "eksik" olarak saklar.
-      spend: harcananTutar,
-      revenue: ciro,
-      impressions: gosterim,
-      clicks: tiklama,
-      newCustomers: yeniMusteri,
-      returningCustomers: geriDonenMusteri,
-    };
-
-    try {
-      const res = await fetch('/api/upload/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (res.ok && data.success) {
-        setIsSuccess(true);
-        await fetchLogs();
-
-        // 2 saniye sonra otomatik dashboard'a yönlendir
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
-      } else {
-        setErrorMessage(data?.error || 'Veri kaydedilirken bir hata oluştu.');
-      }
-    } catch (err: any) {
-      setErrorMessage(`Bağlantı hatası: ${err?.message || 'Lütfen internetinizi kontrol edin.'}`);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   /* ── File pick & upload ── */
   const pickFile = (picked: File | null) => {
@@ -335,269 +245,14 @@ export default function UploadClient() {
            ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'manual' && (
         <div className="space-y-6">
-          {/* Header & Başarı Bildirimi */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                MANUEL VERİ YÜKLEME
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Lütfen aşağıdaki alanları doldurarak manuel veri girişini tamamlayın.
-              </p>
-            </div>
-
-            {/* Başarı Mesajı Kutusu (Yeşil kutu, checkmark ikonu) */}
-            {isSuccess && (
-              <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-xl shadow-sm animate-fade-in shrink-0">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="text-sm font-medium">Veri başarıyla yüklendi!</span>
-                <button
-                  type="button"
-                  onClick={() => router.push('/dashboard')}
-                  className="ml-2 text-xs font-bold underline hover:opacity-80 flex items-center gap-1"
-                >
-                  Dashboard <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-            )}
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manuel veri girişi</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Reklam paneli, site, mağaza ve DM verilerini elle girin. Tüm alanlar isteğe bağlıdır; boş alan 0 sayılmaz.
+              Sayıları 1.234,56 veya 1234.56 biçiminde yazabilirsiniz.
+            </p>
           </div>
-
-          {/* Hata Bildirimi */}
-          {errorMessage && (
-            <div className="flex items-center gap-2 p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-xl text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* Form Kartı (Main Form Card) */}
-          <div className="bg-card border-[1.5px] border-[#0d9488]/40 rounded-2xl p-6 sm:p-8 shadow-sm">
-            <form onSubmit={handleSave}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                {/* ── Sütun 1 ── */}
-                <div className="space-y-5">
-                  {/* VERİ TARİHİ */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      VERİ TARİHİ
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={veriTarihi}
-                        onChange={(e) => setVeriTarihi(e.target.value)}
-                        placeholder="Tarih seçin..."
-                        className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                      />
-                    </div>
-                  </div>
-
-                  {/* KAMPANYA ADI */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      KAMPANYA ADI
-                    </label>
-                    <input
-                      type="text"
-                      value={kampanyaAdi}
-                      onChange={(e) => setKampanyaAdi(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-
-                  {/* REKLAM SETİ ADI */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      REKLAM SETİ ADI
-                    </label>
-                    <input
-                      type="text"
-                      value={reklamSetiAdi}
-                      onChange={(e) => setReklamSetiAdi(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-
-                  {/* HARCANAN TUTAR */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      HARCANAN TUTAR
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={harcananTutar}
-                        onChange={(e) => setHarcananTutar(e.target.value)}
-                        placeholder="Veri girin..."
-                        className="w-full px-4 py-2.5 pr-10 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                      />
-                      <span className="absolute right-3 text-sm text-muted-foreground font-medium pointer-events-none">
-                        ₺
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* GÖSTERİM */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      GÖSTERİM
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={gosterim}
-                      onChange={(e) => setGosterim(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-
-                  {/* YENİ MÜŞTERİ SAYISI (optional) */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      YENİ MÜŞTERİ SAYISI <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={yeniMusteri}
-                      onChange={(e) => setYeniMusteri(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-                </div>
-
-                {/* ── Sütun 2 ── */}
-                <div className="space-y-5">
-                  {/* VERİ KAYNAĞI */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      VERİ KAYNAĞI
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={veriKaynagi}
-                        onChange={(e) => setVeriKaynagi(e.target.value)}
-                        className="w-full px-4 py-2.5 pr-10 rounded-lg border border-border bg-background text-foreground text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition cursor-pointer"
-                      >
-                        <option value="Manuel Giriş">Manuel Giriş</option>
-                        <option value="Google Ads">Google Ads</option>
-                        <option value="Meta Ads">Meta Ads</option>
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  {/* REKLAM ADI */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      REKLAM ADI
-                    </label>
-                    <input
-                      type="text"
-                      value={reklamAdi}
-                      onChange={(e) => setReklamAdi(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-
-                  {/* CİRO */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      CİRO
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={ciro}
-                        onChange={(e) => setCiro(e.target.value)}
-                        placeholder="Veri girin..."
-                        className="w-full px-4 py-2.5 pr-10 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                      />
-                      <span className="absolute right-3 text-sm text-muted-foreground font-medium pointer-events-none">
-                        ₺
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* TIKLAMA */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      TIKLAMA
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={tiklama}
-                      onChange={(e) => setTiklama(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-
-                  {/* GERİ DÖNEN MÜŞTERİ SAYISI (optional) */}
-                  <div>
-                    <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">
-                      GERİ DÖNEN MÜŞTERİ SAYISI <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={geriDonenMusteri}
-                      onChange={(e) => setGeriDonenMusteri(e.target.value)}
-                      placeholder="Veri girin..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[#0d9488]/40 focus:border-[#0d9488] transition"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Kart Altı (YARDIM VE DESTEK + İPTAL & KAYDET) ── */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t border-border">
-                {/* Sol Altta: İkonlu YARDIM VE DESTEK */}
-                <button
-                  type="button"
-                  onClick={() => setShowHelpModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-[#0d9488] hover:text-[#0f766e] transition-colors"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  YARDIM VE DESTEK
-                </button>
-
-                {/* Sağ Altta: İPTAL ve KAYDET */}
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    disabled={saving}
-                    className="px-8 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700/60 transition disabled:opacity-60"
-                  >
-                    İPTAL
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-9 py-2.5 rounded-lg bg-[#0d9488] hover:bg-[#0f766e] text-white text-sm font-bold shadow-sm transition disabled:opacity-60 flex items-center justify-center gap-2"
-                  >
-                    {saving ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        KAYDEDİLİYOR...
-                      </>
-                    ) : (
-                      'KAYDET'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
+          <ManualEntry onSaved={fetchLogs} />
         </div>
       )}
 
@@ -797,43 +452,6 @@ export default function UploadClient() {
         )}
       </div>
 
-      {/* ── Yardım ve Destek Modalı ── */}
-      {showHelpModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 shadow-xl relative">
-            <button
-              onClick={() => setShowHelpModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2 mb-3">
-              <HelpCircle className="w-6 h-6 text-[#0d9488]" />
-              <h3 className="text-lg font-bold text-foreground">Yardım ve Destek</h3>
-            </div>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                <strong>Manuel Veri Yükleme Nasıl Çalışır?</strong><br />
-                Reklam panellerinizden aldığınız veya manuel tuttuğunuz kampanya metriklerini bu form aracılığıyla sisteme doğrudan girebilirsiniz.
-              </p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Harcanan Tutar & Ciro:</strong> Rakamları nokta veya virgül ile yazabilirsiniz (Örn: 15.000 veya 15000).</li>
-                <li><strong>ROAS & Metrikler:</strong> Girilen Ciro ve Harcama değerlerinden ROAS, CPC ve Dönüşüm Oranları otomatik hesaplanacaktır.</li>
-                <li><strong>Yeni & Geri Dönen Müşteri:</strong> Opsiyoneldir, toplam sipariş ve müşteri analizi için kullanılır.</li>
-              </ul>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowHelpModal(false)}
-                className="px-5 py-2 rounded-lg bg-[#0d9488] text-white text-sm font-semibold hover:bg-[#0f766e] transition"
-              >
-                Anladım
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

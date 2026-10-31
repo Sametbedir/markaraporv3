@@ -95,3 +95,50 @@ By Day,Campaign name,Cost,Impressions,Clicks (Destination),Complete Payment,Tota
     expect(r.rows[0]).toMatchObject({ platform: 'TikTok Ads', spend: 100, clicks: 80, conversions: 4, conversionValue: 600 });
   });
 });
+
+describe('Meta "Raw Data Report" (TR)', () => {
+  // Başlıklar gerçek dışa aktarımla aynı; değerler uydurmadır
+  const table: unknown[][] = [
+    ['Hesap Adı', 'Reklam Adı', 'Reklam Kodu', 'Kampanya Adı', 'Gün', 'Erişim', 'Gösterim', 'Sıklık', 'Para Birimi', 'Harcanan Tutar (TRY)',
+      'Reklam Seti Bütçesi', 'CPC (Bağlantı Tıklaması Başına Ücret)', 'Bağlantı Tıklamaları', 'Sepete Eklemeler',
+      'Sepete Eklemelerin Dönüşüm Değeri', 'Alışveriş dönüşüm değeri', 'Alışverişler', "%25'ine Kadar Oynatılan Videolar", 'Rapor Başlangıcı', 'Rapor Sonu'],
+    ['', '', '', '', '', 900, 1000, 1.1, 'TRY', 150, '', 2, 75, 6, 900, 1200, 3, 40, '2026-10-01', '2026-10-31'],
+    ['Hesap', 'Video A', '1202500001', 'Kampanya X', '2026-10-01', 500, 600, 1.2, 'TRY', 100, 100, 2, 50, 4, 600, 1200, 3, 30, '2026-10-01', '2026-10-31'],
+    ['Hesap', 'Video B', '1202500002', 'Kampanya X', '2026-10-01', 400, 400, 1, 'TRY', 50, 100, 2, 25, 2, 300, '', '', 10, '2026-10-01', '2026-10-31'],
+  ];
+  const p = previewTable(table)!;
+
+  it('ciro ve alışverişleri tanır; kimlik, bütçe ve oranları önermez; video sayımlarını önerir', () => {
+    expect(role(p, 'Alışveriş dönüşüm değeri')).toEqual({ kind: 'field', field: 'conversionValue' });
+    expect(role(p, 'Alışverişler')).toEqual({ kind: 'field', field: 'conversions' });
+    expect(role(p, 'Gün')).toEqual({ kind: 'field', field: 'date' });
+    expect(role(p, 'Reklam Kodu')).toEqual({ kind: 'ignore' });
+    expect(role(p, 'Reklam Seti Bütçesi')).toEqual({ kind: 'ignore' });
+    expect(role(p, 'Sıklık')).toEqual({ kind: 'ignore' });
+    expect(role(p, 'CPC (Bağlantı Tıklaması Başına Ücret)')).toEqual({ kind: 'ignore' });
+    expect(role(p, "%25'ine Kadar Oynatılan Videolar")).toMatchObject({ kind: 'custom' });
+    expect(role(p, 'Sepete Eklemeler')).toMatchObject({ kind: 'custom', key: 'sepeteeklemeler' });
+    expect(p.platform).toBe('Meta Ads');
+  });
+
+  it('tarihsiz toplam satırını atlar, reklam satırlarını kampanya-gün olarak toplar', () => {
+    const m = mappingFromRoles(p.headerRowIndex, p.columns.map((c) => ({ index: c.index, role: c.role })));
+    if ('error' in m) throw new Error(m.error);
+    const r = parseAdReport(table, { mapping: m });
+    expect(r.ok).toBe(true);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0]).toMatchObject({ date: '2026-10-01', dateEnd: null, campaign: 'Kampanya X', spend: 150, conversionValue: 1200, conversions: 3, clicks: 75, custom: { sepeteeklemeler: 6 } });
+    expect(r.currency).toBe('TRY');
+    expect(r.warnings.find((w) => w.code === 'total_row')?.rows).toEqual([2]);
+    expect(r.warnings.some((w) => w.code === 'bad_date')).toBe(false);
+  });
+});
+
+describe('özel metrik biçimi', () => {
+  it('tutar sütunları para, sayımlar sayı', async () => {
+    const { guessFormat } = await import('@/lib/metrics/catalog');
+    expect(guessFormat('Sepete Eklemelerin Dönüşüm Değeri')).toBe('money');
+    expect(guessFormat('Sepete Eklemeler')).toBe('number');
+    expect(guessFormat('DM ciro')).toBe('money');
+  });
+});

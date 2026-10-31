@@ -57,3 +57,8 @@ export function formatMetric(value: number | null, format: string, money: (v: nu
   if (format === 'ratio') return `${n(2)}x`;
   return Number.isInteger(value) ? n(0) : n(2);
 }
+
+/** Özel metrik başlığından varsayılan biçim: tutar/değer sütunları para, diğerleri sayı. */
+export function guessFormat(label: string): MetricFormat {
+  return /(değer|deger|value|tutar|ciro|gelir|revenue|amount|ücret|ucret|cost|harcama|sepet tutar)/i.test(label) ? 'money' : 'number';
+}

@@ -237,3 +237,25 @@
   .report-doc .doc-page:last-child { break-after: auto; }
   .report-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Rapor belgesi: öne çıkan sayılar, karşılaştırma, huni, pay çubukları */
+.report-doc .doc-hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin-bottom: 4mm; }
+.report-doc .doc-hero-item { border-radius: 3mm; padding: 4.5mm; background: #eef2ff; break-inside: avoid; }
+.report-doc .doc-hero-value { font-size: 22pt; font-weight: 800; margin-top: 1mm; color: #312e81; font-variant-numeric: tabular-nums; }
+.report-doc .doc-table .num { text-align: right; }
+.report-doc .doc-table th.num { text-align: right; }
+.report-doc .doc-table .strong { font-weight: 700; }
+.report-doc .doc-table tbody tr:nth-child(even) td { background: #f9fafb; }
+.report-doc .doc-row-muted td { color: var(--doc-muted); font-style: italic; }
+.report-doc .doc-compare td:first-child { width: 42%; }
+.report-doc .doc-funnel { display: grid; gap: 2.5mm; break-inside: avoid; }
+.report-doc .doc-funnel-row { display: grid; grid-template-columns: 38mm 1fr 26mm 16mm; align-items: center; gap: 3mm; font-size: 10pt; }
+.report-doc .doc-funnel-label { color: var(--doc-ink); }
+.report-doc .doc-funnel-bar { height: 6mm; background: #f3f4f6; border-radius: 1.5mm; overflow: hidden; }
+.report-doc .doc-funnel-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #4f46e5, #818cf8); border-radius: 1.5mm; }
+.report-doc .doc-funnel-value { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.report-doc .doc-funnel-rate { text-align: right; color: var(--doc-muted); font-size: 9pt; }
+.report-doc .doc-share { display: inline-flex; align-items: center; gap: 2mm; white-space: nowrap; }
+.report-doc .doc-share-track { display: inline-block; width: 18mm; height: 2.5mm; background: #e5e7eb; border-radius: 1mm; overflow: hidden; }
+.report-doc .doc-share-track > span { display: block; height: 100%; background: var(--doc-accent); }
+.report-doc .doc-funnel + .doc-caption { margin-top: 4mm; }

@@ -57,10 +57,14 @@ export const FIELD_ALIASES: Record<AdField, string[]> = {
     'websitepurchasesconversionvalue', 'purchasevalue', 'totalpurchasevalue', 'satisgeliri',
     // Google Ads (TR) kısaltması ve TikTok Ads
     'donusdegeri', 'totalcompletepaymentvalue', 'completepaymentvalue', 'totalpurchasevaluewebsite',
+    // Meta "Raw Data Report" (TR) ve diğer Türkçe Meta adlandırmaları
+    'alisverisdonusumdegeri', 'alisverislerindonusumdegeri', 'satinalmalarindonusumdegeri',
+    'websitesisatinalmalarinindonusumdegeri', 'websitesindekisatinalmalarindonusumdegeri',
   ],
   conversions: [
     'siparis', 'siparissayisi', 'orders', 'purchases', 'satinalmalar', 'satinalma',
     'websitepurchases', 'conversions', 'conv', 'donusumler', 'donusum', 'completepayment', 'purchaseswebsite',
+    'alisverisler', 'alisveris', 'websitesindekisatinalmalar', 'websitesisatinalmalari',
   ],
   impressions: ['gosterim', 'gosterimler', 'impressions', 'impr', 'impression'],
   clicks: ['tiklama', 'tiklamalar', 'clicks', 'click', 'linkclicks', 'baglantitiklamalari', 'clicksall', 'tiklamalartumu', 'clicksdestination'],
@@ -145,7 +149,10 @@ export function mapHeaders(headerRow: unknown[]): HeaderMapping {
 const PLATFORM_SIGNATURES: { platform: string; keys: string[] }[] = [
   {
     platform: 'Meta Ads',
-    keys: ['amountspent', 'harcanantutar', 'reportingstarts', 'raporlamabaslangici', 'purchasesconversionvalue', 'satinalmalardonusumdegeri', 'linkclicks', 'baglantitiklamalari'],
+    keys: [
+      'amountspent', 'harcanantutar', 'reportingstarts', 'raporlamabaslangici', 'purchasesconversionvalue',
+      'satinalmalardonusumdegeri', 'linkclicks', 'baglantitiklamalari', 'alisverisdonusumdegeri', 'reklamsetiadi',
+    ],
   },
   {
     platform: 'Google Ads',
