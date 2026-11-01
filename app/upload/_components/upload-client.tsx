@@ -322,7 +322,7 @@ export default function UploadClient() {
 
             {file && (previewing || previewError || preview) && (
               <div className="mt-5">
-                {previewing && !preview && <p className="text-sm text-muted-foreground">Dosya okunuyor…</p>}
+                {previewing && !preview && <p className="text-sm text-muted-foreground">Dosya okunuyor, sütunlar eşleştiriliyor (yeni biçimlerde Gemini birkaç saniye sürebilir)…</p>}
                 {previewError && (
                   <p role="alert" className="text-sm text-red-600 dark:text-red-400">
                     {previewError} Yine de &quot;Yükle&quot; ile otomatik okumayı deneyebilirsiniz.

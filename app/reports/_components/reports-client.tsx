@@ -2,10 +2,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileText, Send, EyeOff, ExternalLink, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { FileText, Send, EyeOff, ExternalLink, CheckCircle2, Loader2, Sparkles, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import ReportDocument from '@/components/report-document';
-import type { ReportDocumentData } from '@/lib/report/document';
+import { INSIGHT_LABELS, INSIGHT_SECTIONS, type InsightSection, type ReportDocumentData, type ReportInsights } from '@/lib/report/document';
 import { monthLabel } from '@/lib/report/months';
 
 type MonthRow = { month: string; has_data: boolean; published_at: string | null; has_notes: boolean };
@@ -22,6 +22,7 @@ export default function ReportsClient() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [summary, setSummary] = useState('');
   const [actions, setActions] = useState('');
+  const [insights, setInsights] = useState<ReportInsights | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [publishing, setPublishing] = useState(false);
   const [drafting, setDrafting] = useState(false);
@@ -53,36 +54,43 @@ export default function ReportsClient() {
     setDetail(data);
     setSummary(data.draft.summary);
     setActions(data.draft.actions);
+    setInsights(data.draft.insights ?? null);
     setSaveState('idle');
   }, []);
 
   useEffect(() => { loadMonths(); }, [loadMonths]);
   useEffect(() => { if (selected) loadDetail(selected); }, [selected, loadDetail]);
 
-  const save = useCallback(async (month: string, s: string, a: string) => {
+  const save = useCallback(async (month: string, s: string, a: string, ins: ReportInsights | null) => {
     setSaveState('saving');
     const res = await fetch(`/api/reports/${month}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: s, actions: a }),
+      body: JSON.stringify({ summary: s, actions: a, insights: ins }),
     }).catch(() => null);
     setSaveState(res?.ok ? 'saved' : 'error');
   }, []);
 
   // Yazmayı bıraktıktan kısa süre sonra otomatik kaydet
-  const onText = (nextSummary: string, nextActions: string) => {
+  const onText = (nextSummary: string, nextActions: string, nextInsights: ReportInsights | null = insights) => {
     setSummary(nextSummary);
     setActions(nextActions);
+    setInsights(nextInsights);
     if (!selected) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => save(selected, nextSummary, nextActions), SAVE_DELAY_MS);
+    saveTimer.current = setTimeout(() => save(selected, nextSummary, nextActions, nextInsights), SAVE_DELAY_MS);
+  };
+
+  const onInsight = (key: InsightSection, value: string) => {
+    const next: ReportInsights = { ...(insights ?? {}), [key]: value };
+    onText(summary, actions, INSIGHT_SECTIONS.some((k) => next[k]?.trim()) ? next : null);
   };
 
   const flushSave = async () => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
-      if (selected) await save(selected, summary, actions);
+      if (selected) await save(selected, summary, actions, insights);
     }
   };
 
@@ -119,7 +127,7 @@ export default function ReportsClient() {
   /** AI taslağı yalnızca forma yazılır; düzenleyip kaydetmek ve yayınlamak kullanıcıdadır */
   const aiDraft = async () => {
     if (!selected) return;
-    if ((summary.trim() || actions.trim()) && !confirm('Mevcut değerlendirme ve aksiyon planı AI taslağıyla değiştirilsin mi?')) return;
+    if ((summary.trim() || actions.trim() || insights) && !confirm('Mevcut değerlendirme, aksiyon planı ve bölüm yorumları AI taslağıyla değiştirilsin mi?')) return;
     setDrafting(true);
     const res = await fetch(`/api/reports/${selected}/ai-draft`, {
       method: 'POST',
@@ -133,17 +141,20 @@ export default function ReportsClient() {
       return;
     }
     setDraftModel(data.model);
-    onText(data.summary, data.actions);
+    onText(data.summary, data.actions, data.insights ?? null);
     toast.success('AI taslağı forma eklendi; kontrol edip düzenleyin');
   };
 
-  const openPreview = async (published: boolean) => {
+  const openPreview = async (published: boolean, downloadPdf = false) => {
     await flushSave();
-    window.open(`/reports/${selected}/print${published ? '?surum=yayin' : ''}`, '_blank', 'noopener');
+    const q = new URLSearchParams();
+    if (published) q.set('surum', 'yayin');
+    if (downloadPdf) q.set('indir', '1');
+    window.open(`/reports/${selected}/print${q.size ? `?${q}` : ''}`, '_blank', 'noopener');
   };
 
   const input = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary';
-  const preview: ReportDocumentData | null = detail ? { ...detail.draft, summary, actions } : null;
+  const preview: ReportDocumentData | null = detail ? { ...detail.draft, summary, actions, insights } : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -212,8 +223,11 @@ export default function ReportsClient() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2 pt-1 border-t border-border">
+                    <button onClick={() => openPreview(!!row.published_at, true)} disabled={!row.has_data && !row.published_at} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-foreground text-background disabled:opacity-50" title={row.published_at ? 'Yayınlanan hali PDF olarak indirir' : 'Güncel taslağı PDF olarak indirir'}>
+                      <FileDown className="w-4 h-4" /> PDF indir{row.published_at ? '' : ' (taslak)'}
+                    </button>
                     <button onClick={() => openPreview(false)} disabled={!row.has_data} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-border hover:bg-accent disabled:opacity-50">
-                      <ExternalLink className="w-4 h-4" /> PDF / PNG (güncel)
+                      <ExternalLink className="w-4 h-4" /> Önizle (güncel)
                     </button>
                     {row.published_at && (
                       <button onClick={() => openPreview(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-border hover:bg-accent">
@@ -227,10 +241,10 @@ export default function ReportsClient() {
                   <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 space-y-2">
                     <button onClick={aiDraft} disabled={drafting || !row.has_data} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50">
                       {drafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      {drafting ? 'Taslak hazırlanıyor…' : draftModel ? 'AI ile yeniden yaz' : 'AI ile taslak oluştur'}
+                      {drafting ? 'Rapor yazılıyor…' : draftModel ? 'AI ile yeniden yaz' : 'AI ile raporu yaz'}
                     </button>
                     <p className="text-[11px] text-muted-foreground">
-                      Ayın verilerinden değerlendirme ve aksiyon planı taslağı yazar; yalnızca rapordaki sayıları kullanır. Göndermeden önce okuyup düzenleyin.
+                      Ayın verilerinden değerlendirme, aksiyon planı ve her bölümün yorumunu yazar; yalnızca rapordaki sayıları kullanır. Göndermeden önce okuyup düzenleyin.
                       Ücretsiz Gemini kullanılır: marka adı gönderilmez, toplu veriler Google tarafından ürün geliştirmede kullanılabilir.
                       {draftModel ? ` (${draftModel})` : ''}
                     </p>
@@ -245,6 +259,18 @@ export default function ReportsClient() {
                     <p className="text-xs text-muted-foreground">Her satır bir madde olur.</p>
                     <textarea id="report-actions" rows={6} maxLength={5000} value={actions} onChange={(e) => onText(summary, e.target.value)} className={`${input} mt-2`} placeholder={'Marka arama kampanyasının bütçesini artırmak\nDüşük ROAS\'lı reklam setlerini durdurmak'} />
                   </div>
+                  <details className="rounded-xl border border-border p-3" open={!!insights}>
+                    <summary className="cursor-pointer text-sm font-medium text-foreground">Bölüm yorumları</summary>
+                    <p className="text-xs text-muted-foreground mt-1">Rapordaki ilgili tablonun altında &quot;Yorum&quot; kutusu olarak görünür. Boş bırakılan bölüm rapora girmez.</p>
+                    <div className="mt-3 space-y-3">
+                      {INSIGHT_SECTIONS.map((k) => (
+                        <div key={k}>
+                          <label htmlFor={`ins-${k}`} className="text-xs font-medium text-muted-foreground">{INSIGHT_LABELS[k]}</label>
+                          <textarea id={`ins-${k}`} rows={3} maxLength={1500} value={insights?.[k] ?? ''} onChange={(e) => onInsight(k, e.target.value)} className={`${input} mt-1`} />
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                   <p className="text-xs text-muted-foreground" aria-live="polite">
                     {saveState === 'saving' ? 'Kaydediliyor…' : saveState === 'saved' ? 'Taslak kaydedildi' : saveState === 'error' ? 'Kaydedilemedi; bağlantıyı kontrol edin' : ''}
                   </p>

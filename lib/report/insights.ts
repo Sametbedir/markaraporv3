@@ -74,12 +74,14 @@ export type FunnelStep = { label: string; value: number; rate: number | null };
 export function funnel(r: BrandMonthReport): FunnelStep[] {
   const c = r.current;
   if (!c) return [];
-  const extra = (keys: string[]) => r.extra?.find((e) => e.kind === 'custom' && keys.includes(e.key) && e.value !== null)?.value ?? null;
+  // Anahtar listesi veya metrik adı (dosyalarda "Sepet Ekleme", "Sepete eklemeler" gibi farklı yazılır)
+  const extra = (keys: string[], label: RegExp) =>
+    r.extra?.find((e) => e.kind === 'custom' && e.value !== null && (keys.includes(e.key) || label.test(e.label)) && !/değer|deger|value|tutar/i.test(e.label))?.value ?? null;
   const raw: [string, number | null][] = [
     ['Gösterim', c.impressions || null],
     ['Tıklama', c.clicks || null],
-    ['Sepete ekleme', extra(ADD_TO_CART_KEYS)],
-    ['Ödeme başlatma', extra(CHECKOUT_KEYS)],
+    ['Sepete ekleme', extra(ADD_TO_CART_KEYS, /sepet(e|ine)?\s*ekle|add\s*to\s*cart/i)],
+    ['Ödeme başlatma', extra(CHECKOUT_KEYS, /ödeme\s*başlat|odeme\s*baslat|başlatılan\s*alışveriş|checkout/i)],
     ['Satın alma (platform)', c.conversions || null],
   ];
   const steps: FunnelStep[] = [];

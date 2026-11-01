@@ -10,7 +10,20 @@ import { campaignTable, funnel, weeklyBreakdown } from '@/lib/report/insights';
 
 const r2 = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 100) / 100);
 
+/** Sayıları Türkçe biçimli metne çevirir (1234.5 → "1.234,5"); model sayıları aynen kopyalar, biçim hatası yapmaz. */
+function trNumbers(value: unknown): unknown {
+  if (typeof value === 'number') return value.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+  if (Array.isArray(value)) return value.map(trNumbers);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, trNumbers(v)]));
+  return value;
+}
+
 export function reportToAiContext(r: BrandMonthReport) {
+  const ctx = buildContext(r);
+  return ctx ? (trNumbers(ctx) as typeof ctx) : null;
+}
+
+function buildContext(r: BrandMonthReport) {
   const c = r.current;
   const p = r.previous;
   if (!c) return null;
@@ -58,6 +71,7 @@ export function reportToAiContext(r: BrandMonthReport) {
     notlar: [
       'donusum ve donusum_degeri reklam platformlarının bildirdiğidir; mağaza cirosu değildir.',
       'Değeri null olan alan veride yoktur; 0 değildir.',
+      'Sayılar Türkçe biçimdedir (binlik ayırıcı nokta, ondalık virgül); metinde aynen bu biçimle yaz.',
     ],
   };
 }

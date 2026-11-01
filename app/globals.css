@@ -259,3 +259,6 @@
 .report-doc .doc-share-track { display: inline-block; width: 18mm; height: 2.5mm; background: #e5e7eb; border-radius: 1mm; overflow: hidden; }
 .report-doc .doc-share-track > span { display: block; height: 100%; background: var(--doc-accent); }
 .report-doc .doc-funnel + .doc-caption { margin-top: 4mm; }
+.report-doc .doc-insight { margin-top: 4mm; padding: 3mm 4mm; border-left: 1mm solid var(--doc-accent); background: #f5f7ff; border-radius: 0 2mm 2mm 0; break-inside: avoid; }
+.report-doc .doc-insight-label { font-size: 8pt; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--doc-accent); }
+.report-doc .doc-insight-text { margin-top: 1mm; font-size: 9.5pt; line-height: 1.55; white-space: pre-wrap; }

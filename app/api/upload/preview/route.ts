@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { requireBrand } from '@/lib/brand';
 import { SUPPORTED_EXTENSIONS, previewUploadedFile } from '@/lib/import/file';
 import { type TemplateEntry, applyTemplate } from '@/lib/import/preview';
+import { aiConfigured } from '@/lib/ai/gemini';
+import { aiSuggestRoles } from '@/lib/ai/mapping';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -51,6 +53,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Bu biçim ilk kez geliyorsa kuralın tanımadığı sütunları Gemini'ye sor (öneri; kullanıcı onaylar)
+  let aiMapped: { changed: number[]; model: string } | null = null;
+  let aiError: string | null = null;
+  if (!templateApplied && aiConfigured() && preview.columns.some((c) => c.role.kind !== 'field')) {
+    try {
+      const ai = await aiSuggestRoles(preview.columns, preview.rows);
+      if (ai) {
+        preview = { ...preview, columns: ai.columns };
+        aiMapped = { changed: ai.changed, model: ai.model };
+      }
+    } catch (e: any) {
+      aiError = 'Gemini şu an yanıt vermedi; sütunlar kural tabanlı eşlendi.';
+      console.warn('[upload/preview] AI eşleme başarısız:', e?.message ?? e);
+    }
+  }
+
   const definitions = await prisma.metricDefinition.findMany({
     where: { brandId: ctx.brandId, kind: 'custom' },
     select: { key: true, label: true },
@@ -60,6 +78,8 @@ export async function POST(req: NextRequest) {
     sheet_name: result.sheetName,
     sheet_names: result.sheetNames,
     template_applied: templateApplied,
+    ai_mapped: aiMapped,
+    ai_error: aiError,
     existing_metrics: definitions,
     ...preview,
   });

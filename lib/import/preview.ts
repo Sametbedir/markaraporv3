@@ -26,6 +26,10 @@ export type PreviewColumn = {
   samples: string[];
   numeric: boolean;
   role: ColumnRole;
+  /** Rol Gemini tarafından önerildiyse true (kullanıcı ekranda görür) */
+  ai?: boolean;
+  /** Özel metrik için önerilen biçim */
+  format?: 'number' | 'money';
 };
 
 export type TablePreview = {

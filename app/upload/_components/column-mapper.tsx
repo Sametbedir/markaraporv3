@@ -1,19 +1,21 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, AlertTriangle, Wand2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Wand2, Sparkles } from 'lucide-react';
 
 export type ColumnRole =
   | { kind: 'field'; field: string }
   | { kind: 'custom'; key: string; label: string }
   | { kind: 'ignore' };
 
-export type PreviewColumn = { index: number; header: string; key: string; samples: string[]; numeric: boolean; role: ColumnRole };
+export type PreviewColumn = { index: number; header: string; key: string; samples: string[]; numeric: boolean; role: ColumnRole; ai?: boolean };
 
 export type UploadPreview = {
   sheet_name: string | null;
   sheet_names: string[];
   template_applied: boolean;
+  ai_mapped?: { changed: number[]; model: string } | null;
+  ai_error?: string | null;
   existing_metrics: { key: string; label: string }[];
   headerRowIndex: number;
   columns: PreviewColumn[];
@@ -68,12 +70,13 @@ export default function ColumnMapper({
     onChange(
       preview.columns.map((c) => {
         if (c.index !== index) return c;
-        if (value === 'ignore') return { ...c, role: { kind: 'ignore' } };
+        // Kullanıcı değiştirdiyse artık Gemini önerisi değildir
+        if (value === 'ignore') return { ...c, ai: false, role: { kind: 'ignore' } };
         if (value === 'custom') {
           const existing = preview.existing_metrics.find((m) => m.key === c.key);
-          return { ...c, role: { kind: 'custom', key: c.key || `sutun${c.index + 1}`, label: existing?.label ?? c.header } };
+          return { ...c, ai: false, role: { kind: 'custom', key: c.key || `sutun${c.index + 1}`, label: existing?.label ?? c.header } };
         }
-        return { ...c, role: { kind: 'field', field: value } };
+        return { ...c, ai: false, role: { kind: 'field', field: value } };
       })
     );
   };
@@ -105,6 +108,12 @@ export default function ColumnMapper({
         {preview.template_applied && (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary"><Wand2 className="w-3.5 h-3.5" /> Bu biçimdeki önceki yüklemenizin eşlemesi uygulandı</span>
         )}
+        {preview.ai_mapped && preview.ai_mapped.changed.length > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300">
+            <Sparkles className="w-3.5 h-3.5" /> Gemini {preview.ai_mapped.changed.length} sütunu eşleştirdi; işaretli sütunları kontrol edin
+          </span>
+        )}
+        {preview.ai_error && <span className="px-2 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{preview.ai_error}</span>}
         {preview.platform && <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground">Tanınan platform: {preview.platform}</span>}
         <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground">Başlık satırı: {preview.headerRowIndex + 1}</span>
       </div>
@@ -115,8 +124,11 @@ export default function ColumnMapper({
             <tr className="align-bottom">
               {preview.columns.map((c) => (
                 <th key={c.index} scope="col" className="px-2 pb-2 text-left font-normal min-w-[11rem]">
-                  <p className="text-xs font-semibold text-foreground truncate max-w-[14rem]" title={c.header}>{c.header}</p>
-                  <select aria-label={`"${c.header}" sütunu`} value={roleValue(c.role)} onChange={(e) => setRole(c.index, e.target.value)} className={`${sel} mt-1 ${c.role.kind === 'ignore' ? 'text-muted-foreground' : ''}`}>
+                  <p className="text-xs font-semibold text-foreground truncate max-w-[14rem] flex items-center gap-1" title={c.header}>
+                    {c.ai && <Sparkles className="w-3 h-3 shrink-0 text-violet-500" aria-label="Gemini önerisi" />}
+                    <span className="truncate">{c.header}</span>
+                  </p>
+                  <select aria-label={`"${c.header}" sütunu`} value={roleValue(c.role)} onChange={(e) => setRole(c.index, e.target.value)} className={`${sel} mt-1 ${c.role.kind === 'ignore' ? 'text-muted-foreground' : ''} ${c.ai ? 'border-violet-400 ring-1 ring-violet-300/50' : ''}`}>
                     <option value="ignore">Yok say</option>
                     <optgroup label="Standart alanlar">
                       {FIELD_OPTIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}

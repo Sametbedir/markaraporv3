@@ -6,6 +6,7 @@ import { isMonth } from '@/lib/report/months';
 import { buildBrandMonthReport } from '@/lib/report/brand-report';
 import { reportToAiContext } from '@/lib/ai/context';
 import { reportDraft } from '@/lib/ai/tasks';
+import { sanitizeInsights } from '@/lib/report/document';
 import { AiUnavailableError, aiConfigured } from '@/lib/ai/gemini';
 
 /**
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mon
     return NextResponse.json({
       summary: res.data.degerlendirme.trim(),
       actions: res.data.aksiyonlar.map((a) => `- ${String(a).trim()}`).join('\n'),
+      insights: sanitizeInsights({ ...res.data.bolumler, model: res.model }),
       model: res.model,
     });
   } catch (error) {

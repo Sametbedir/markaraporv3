@@ -28,15 +28,30 @@ ${JSON.stringify(ctx)}`,
   });
 }
 
-export type ReportDraft = { degerlendirme: string; aksiyonlar: string[] };
+export type ReportDraft = {
+  degerlendirme: string;
+  aksiyonlar: string[];
+  bolumler?: Partial<Record<'karsilastirma' | 'haftalik' | 'huni' | 'platform' | 'kampanya', string>>;
+};
 
 const DRAFT_SCHEMA = {
   type: 'object',
   properties: {
     degerlendirme: { type: 'string', description: 'Ayın 2-3 paragraflık değerlendirmesi; müşteriye gönderilecek rapora girer.' },
     aksiyonlar: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 6, description: 'Gelecek ay için somut aksiyonlar; her biri tek cümle.' },
+    bolumler: {
+      type: 'object',
+      description: 'Rapordaki her bölümün altına girecek 2-3 cümlelik yorum. Veride karşılığı olmayan bölüm için boş metin.',
+      properties: {
+        karsilastirma: { type: 'string', description: 'Bu ay ile önceki ayın karşılaştırması: hangi metrik neden iyi/kötü yönde değişti.' },
+        haftalik: { type: 'string', description: 'Haftalık kırılım: en iyi ve en zayıf hafta, ay içindeki eğilim.' },
+        huni: { type: 'string', description: 'Satış hunisi: en çok kayıp hangi adımda, geçiş oranları.' },
+        platform: { type: 'string', description: 'Platformların harcama payı ve verimlilik karşılaştırması.' },
+        kampanya: { type: 'string', description: 'Öne çıkan ve zayıf kalan kampanyalar.' },
+      },
+    },
   },
-  required: ['degerlendirme', 'aksiyonlar'],
+  required: ['degerlendirme', 'aksiyonlar', 'bolumler'],
 };
 
 /** Aylık rapor: müşteriye gidecek değerlendirme ve aksiyon planı taslağı. Kullanıcı düzenleyip onaylar. */
@@ -48,7 +63,8 @@ export async function reportDraft(ctx: Context, fresh = false) {
     system: `${ANALYST}
 Bu metin ajansın müşterisine (marka sahibine) gidecek aylık rapora girecek: biz dili ("bu ay ... yaptık / gördük"), saygılı ve net bir ton kullan.
 Değerlendirmede önce genel sonucu (harcama, dönüşüm değeri, ROAS ve önceki aya göre değişim), sonra öne çıkan kampanya/platformu ve zayıf kalan alanı anlat.
-Aksiyonlar ölçülebilir olsun (ör. "X kampanyasının bütçesini Y kampanyasına kaydırmak"); bütçe tutarı veya hedef sayı uydurma.`,
+Aksiyonlar ölçülebilir olsun (ör. "X kampanyasının bütçesini Y kampanyasına kaydırmak"); bütçe tutarı veya hedef sayı uydurma.
+Bölüm yorumları kısa olsun (2-3 cümle), tabloyu tekrar etme; tablodan çıkan sonucu ve nedenini söyle. Veride o bölüm yoksa (ör. satış hunisi verisi yok) boş bırak.`,
     prompt: `Aylık rapor verisi (JSON):\n${JSON.stringify(ctx)}`,
   });
 }

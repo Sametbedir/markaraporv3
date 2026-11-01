@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBrand } from '@/lib/brand';
 import { isMonth } from '@/lib/report/months';
 import { liveDocument, publishedDocument } from '@/lib/report/document-server';
+import { sanitizeInsights } from '@/lib/report/document';
 
 const MAX_TEXT = 5000;
 
@@ -22,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ mon
   });
 }
 
-/** PUT /api/reports/:month { summary, actions } — değerlendirme ve aksiyon planı taslağını kaydeder */
+/** PUT /api/reports/:month { summary, actions, insights? } — değerlendirme, aksiyon planı ve bölüm yorumlarını kaydeder */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ month: string }> }) {
   const ctx = await requireBrand();
   if (ctx instanceof NextResponse) return ctx;
@@ -34,10 +35,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ mont
   if (summary.length > MAX_TEXT || actions.length > MAX_TEXT) {
     return NextResponse.json({ error: `Metinler en fazla ${MAX_TEXT} karakter olabilir.` }, { status: 400 });
   }
+  // insights gönderilmezse dokunulmaz; null gönderilirse silinir
+  const insights = body && 'insights' in body ? sanitizeInsights(body.insights) : undefined;
+  const insightsJson = insights === undefined ? undefined : insights ? JSON.stringify(insights) : null;
   await prisma.reportSnapshot.upsert({
     where: { brandId_month: { brandId: ctx.brandId, month } },
-    create: { brandId: ctx.brandId, userId: ctx.userId, month, summary, actions },
-    update: { summary, actions },
+    create: { brandId: ctx.brandId, userId: ctx.userId, month, summary, actions, insightsJson: insightsJson ?? null },
+    update: { summary, actions, insightsJson },
   });
   return NextResponse.json({ saved_at: new Date().toISOString() });
 }

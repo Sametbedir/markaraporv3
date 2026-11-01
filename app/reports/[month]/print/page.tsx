@@ -21,7 +21,7 @@ export default async function ReportPrintPage({
   const session = await auth();
   if (!session?.user?.id) redirect('/');
   const { month } = await params;
-  const { surum } = await searchParams;
+  const { surum, indir } = await searchParams;
   if (!isMonth(month)) notFound();
 
   const brand = await resolveActiveBrand(session.user.id);
@@ -29,5 +29,5 @@ export default async function ReportPrintPage({
   const data = surum === 'yayin' ? publishedDocument(snapshot) : await liveDocument(brand, session.user.id, month, snapshot);
   if (!data) notFound();
 
-  return <ReportPrintView data={data} backHref={`/reports?ay=${month}`} />;
+  return <ReportPrintView data={data} backHref={`/reports?ay=${month}`} autoDownload={indir === '1'} />;
 }

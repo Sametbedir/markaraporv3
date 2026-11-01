@@ -14,8 +14,15 @@ export const metadata: Metadata = {
 };
 
 /** Müşteri linkinden yayınlanmış raporun belge görünümü (PDF/PNG indirme). */
-export default async function PortalReportPage({ params }: { params: Promise<{ token: string; month: string }> }) {
+export default async function PortalReportPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string; month: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const { token, month } = await params;
+  const { indir } = await searchParams;
   if (!isWellFormedToken(token) || !isMonth(month)) notFound();
 
   const link = await prisma.shareLink.findUnique({ where: { tokenHash: hashShareToken(token) }, include: { brand: true } });
@@ -25,5 +32,5 @@ export default async function PortalReportPage({ params }: { params: Promise<{ t
   const data = publishedDocument(snapshot);
   if (!data) notFound();
 
-  return <ReportPrintView data={data} backHref={`/p/${token}?ay=${month}`} />;
+  return <ReportPrintView data={data} backHref={`/p/${token}?ay=${month}`} autoDownload={indir === '1'} />;
 }

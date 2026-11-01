@@ -55,6 +55,18 @@ describe('satış hunisi', () => {
   });
 });
 
+describe('satış hunisi: farklı yazılmış metrik adları', () => {
+  it('"Sepet Ekleme" adlı özel metrik tanınır, sepet değeri sayılmaz', () => {
+    const r = report({
+      extra: [
+        { key: 'sepetekleme', label: 'Sepete Ekleme', format: 'number', kind: 'custom', formula: null, value: 90, previous: null },
+        { key: 'sepetdegeri', label: 'Sepete ekleme değeri', format: 'money', kind: 'custom', formula: null, value: 99999, previous: null },
+      ],
+    });
+    expect(funnel(r).find((s) => s.label === 'Sepete ekleme')?.value).toBe(90);
+  });
+});
+
 describe('haftalık kırılım', () => {
   it('1–7 … 29–30 haftaları', () => {
     const w = weeklyBreakdown(report());

@@ -1,7 +1,7 @@
 import type { Brand, ReportSnapshot } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { buildBrandMonthReport } from './brand-report';
-import { parseSnapshot, type ReportDocumentData } from './document';
+import { parseInsights, parseSnapshot, type ReportDocumentData } from './document';
 
 /** Raporu hazırlayan: kullanıcının şirket adı, yoksa adı. */
 export async function preparedByFor(userId: string): Promise<string> {
@@ -21,6 +21,7 @@ export async function liveDocument(brand: Brand, userId: string, month: string, 
     report,
     summary: snapshot?.summary ?? '',
     actions: snapshot?.actions ?? '',
+    insights: parseInsights(snapshot?.insightsJson),
     publishedAt: null,
   };
 }

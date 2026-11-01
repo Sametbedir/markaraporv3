@@ -70,6 +70,16 @@ function ShareBar({ value }: { value: number | null }) {
   );
 }
 
+function Insight({ text }: { text?: string }) {
+  if (!text?.trim()) return null;
+  return (
+    <div className="doc-insight">
+      <p className="doc-insight-label">Yorum</p>
+      <p className="doc-insight-text">{text.trim()}</p>
+    </div>
+  );
+}
+
 const HERO_KEYS = ['spend', 'conversionValue', 'roas'];
 
 export default function ReportDocument({ data }: { data: ReportDocumentData }) {
@@ -84,6 +94,7 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
   const highlights = reportHighlights(r, money);
   const actionItems = splitLines(actions);
   const campaigns = r.campaigns;
+  const ins = data.insights ?? null;
   const items = c ? reportKpiItems(r, money, DOCUMENT_DEFAULT_KPIS) : [];
   const heroPicked = items.filter((k) => HERO_KEYS.includes(k.key));
   const hero = heroPicked.length ? heroPicked : items.slice(0, 3);
@@ -160,12 +171,6 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
                 <ul className="doc-list">{highlights.map((h) => <li key={h}>{h}</li>)}</ul>
               </>
             )}
-            {summary.trim() && (
-              <>
-                <h3 className="doc-h3">Değerlendirme</h3>
-                <p className="doc-text">{summary.trim()}</p>
-              </>
-            )}
           </>
         ) : (
           <p className="doc-text">Bu ay için kayıtlı reklam verisi yok.</p>
@@ -190,11 +195,12 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
             </tbody>
           </table>
           {!r.previous && <p className="doc-caption">Önceki ay için veri olmadığından değişim hesaplanmadı.</p>}
+          <Insight text={ins?.karsilastirma} />
 
         </Page>
       )}
 
-      {/* 4. Günlük/haftalık gidişat ve satış hunisi */}
+      {/* 4. Günlük ve haftalık gidişat */}
       {c && (
         <Page footer={footer}>
           <H2>Günlük gidişat</H2>
@@ -236,8 +242,15 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
                   ))}
                 </tbody>
               </table>
+              <Insight text={ins?.haftalik} />
             </>
           )}
+        </Page>
+      )}
+
+      {/* 5. Satış hunisi ve platformlar */}
+      {c && (funnelSteps.length >= 3 || r.platforms.length > 0) && (
+        <Page footer={footer}>
           {funnelSteps.length >= 3 && (
             <>
               <H2>Satış hunisi</H2>
@@ -252,14 +265,9 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
                 ))}
               </div>
               <p className="doc-caption">Yüzdeler bir önceki adıma göre geçiş oranıdır. Sepete ekleme ve ödeme başlatma, yüklenen dosyada veya manuel girişte bu metrikler varsa gösterilir.</p>
+              <Insight text={ins?.huni} />
             </>
           )}
-        </Page>
-      )}
-
-      {/* 5. Platformlar ve kampanyalar */}
-      {c && (r.platforms.length > 0 || campaigns.length > 0) && (
-        <Page footer={footer}>
           {r.platforms.length > 0 && (
             <>
               <H2>Platformlar</H2>
@@ -283,9 +291,15 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
                   })}
                 </tbody>
               </table>
+              <Insight text={ins?.platform} />
             </>
           )}
+        </Page>
+      )}
 
+      {/* 6. Kampanyalar */}
+      {c && campaigns.length > 0 && (
+        <Page footer={footer}>
           {campaigns.length > 0 && (
             <>
               <H2>Kampanyalar</H2>
@@ -309,20 +323,33 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
                   ))}
                 </tbody>
               </table>
+              <Insight text={ins?.kampanya} />
             </>
           )}
         </Page>
       )}
 
-      {/* 5. Aksiyon planı ve yöntem */}
+      {/* 7. Değerlendirme ve aksiyon planı */}
+      {(summary.trim() || actionItems.length > 0) && (
+        <Page footer={footer}>
+          {summary.trim() && (
+            <>
+              <H2>Değerlendirme</H2>
+              <p className="doc-text">{summary.trim()}</p>
+            </>
+          )}
+          {actionItems.length > 0 && (
+            <>
+              <H2>Aksiyon planı</H2>
+              <ol className="doc-actions">{actionItems.map((a, i) => <li key={i}>{a}</li>)}</ol>
+            </>
+          )}
+        </Page>
+      )}
+
+      {/* 8. Ek: yöntem ve tanımlar */}
       <Page footer={footer}>
-        {actionItems.length > 0 && (
-          <>
-            <H2>Aksiyon planı</H2>
-            <ol className="doc-actions">{actionItems.map((a, i) => <li key={i}>{a}</li>)}</ol>
-          </>
-        )}
-        <H2>Yöntem ve tanımlar</H2>
+        <H2>Ek: Yöntem ve tanımlar</H2>
         <ul className="doc-list doc-small">
           <li>Veriler reklam platformlarından alınan raporlardan (dosya yükleme veya manuel giriş) derlenmiştir; eksik değerler tahminle doldurulmamıştır.</li>
           <li>&quot;Dönüşüm&quot; ve &quot;dönüşüm değeri&quot; reklam platformlarının kendi ölçümüdür. Mağaza cirosu ve sipariş sayısıyla aynı değildir; platformlar aynı satışı birden fazla kez sayabilir.</li>
@@ -331,6 +358,7 @@ export default function ReportDocument({ data }: { data: ReportDocumentData }) {
           <li>&quot;Öne çıkanlar&quot; bölümü rapordaki sayılardan otomatik üretilmiştir; harcaması toplamın %5&apos;inden az olan kampanyalar karşılaştırmaya alınmaz.</li>
           <li>Ortalama sepet = dönüşüm değeri ÷ dönüşüm; dönüşüm oranı = dönüşüm ÷ tıklama. Satış hunisindeki yüzdeler bir önceki adıma göre geçiş oranıdır.</li>
           <li>Haftalar ayın günlerine göre 1–7, 8–14, 15–21, 22–28 ve 29–son gün olarak gruplanmıştır. Dönem toplamı olarak elle girilen veriler dönemin ilk gününde görünür.</li>
+          {ins && <li>Bölüm altındaki &quot;Yorum&quot; kutuları yapay zekâ desteğiyle taslak olarak hazırlanmış, ajans tarafından kontrol edilip düzenlenmiştir; yalnızca bu rapordaki sayılara dayanır.</li>}
         </ul>
         <p className="doc-caption doc-generated">
           {publishedAt ? `Yayınlanma: ${new Date(publishedAt).toLocaleString('tr-TR')}` : 'Taslak — veriler güncellenebilir'} · MarkaRapor

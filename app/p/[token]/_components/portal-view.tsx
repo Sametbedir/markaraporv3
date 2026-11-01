@@ -105,8 +105,8 @@ function ReportSection({ doc, months, money, printHref }: { doc: ReportDocumentD
           {doc.preparedBy && ` · Hazırlayan: ${doc.preparedBy}`}
         </p>
         {printHref && (
-          <a href={printHref} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground">
-            <FileDown className="w-4 h-4" aria-hidden="true" /> Raporu indir (PDF / PNG)
+          <a href={`${printHref}?indir=1`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground">
+            <FileDown className="w-4 h-4" aria-hidden="true" /> Raporu PDF indir
           </a>
         )}
       </div>
